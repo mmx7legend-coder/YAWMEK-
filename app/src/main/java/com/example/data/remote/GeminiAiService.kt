@@ -127,7 +127,11 @@ object YawmekAiEngine {
                     )
                 }
             } catch (e: Exception) {
-                // Graceful fallback to smart local engine
+                // Graceful fallback to the smart local engine — but log the
+                // real cause (auth error, timeout, malformed response...)
+                // instead of swallowing it silently, so a broken API key or
+                // outage doesn't look identical to "everything is fine".
+                android.util.Log.w("YawmekAiEngine", "Gemini API call failed, using local fallback", e)
             }
         }
 
