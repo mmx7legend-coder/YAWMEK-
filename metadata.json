@@ -1,0 +1,6 @@
+{
+  "name": "YAWMEK",
+  "description": "Your personal daily command center. Tasks, plans, money, habits, goals, and intelligent brain games in one place.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

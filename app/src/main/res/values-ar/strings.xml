@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">يومك</string>
+    <string name="app_tagline">يومك كله... في مكان واحد.</string>
+    <string name="arabic_app_name">يومك</string>
+    <string name="arabic_tagline">يومك كله... في مكان واحد.</string>
+    
+    <!-- Navigation -->
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_plan">الجدول</string>
+    <string name="nav_money">المصاريف</string>
+    <string name="nav_habits">العادات</string>
+    <string name="nav_goals">الأهداف</string>
+    <string name="nav_notes">الملاحظات</string>
+    <string name="nav_games">الألعاب</string>
+    <string name="nav_ai">مساعد يومك</string>
+    <string name="nav_profile">الحساب</string>
+    
+    <!-- Games -->
+    <string name="games_title">ألعاب يومك</string>
+    <string name="games_subtitle">شغّل دماغك. وحط رقمًا قياسيًا جديدًا.</string>
+    <string name="games_daily_challenge">تحدي اليوم</string>
+    <string name="games_train_brain">شغّل دماغك 🧠</string>
+    <string name="games_train_brain_sub">خُض تحدياً ذكياً لمدة 5 دقائق</string>
+    
+    <!-- Onboarding -->
+    <string name="onboarding_get_started">ابدأ الآن</string>
+    <string name="onboarding_next">التالي</string>
+    <string name="onboarding_skip">تخطي</string>
+    <string name="onboarding_finish">لنبدأ يومك</string>
+    <string name="onboarding_title_1">يومك.. منظم بالكامل.</string>
+    <string name="onboarding_sub_1">مهامك، جدولك، مصاريفك، عاداتك وأهدافك — في مكان واحد متكامل.</string>
+    <string name="onboarding_title_2">لا تنسَ ما يهمك.</string>
+    <string name="onboarding_sub_2">سجل مهامك باللغة الطبيعية أو بخطوة سريعة.</string>
+    <string name="onboarding_title_3">شاهد يومك بنظرة واحدة.</string>
+    <string name="onboarding_sub_3">خط زمني ذكي يوضح مواعيدك، مهامك، وأوقات فراغك الحقيقية.</string>
+    <string name="onboarding_title_4">اعرف أين تذهب أموالك.</string>
+    <string name="onboarding_sub_4">تسجيل سريع للمصاريف ومتابعة سهلة للميزانية اليومية والشهرية.</string>
+    <string name="onboarding_title_5">إرشاد ذكي في كل لحظة.</string>
+    <string name="onboarding_sub_5">اسأل \"أعمل إيه دلوقتي؟\" وسيقترح عليك يومك الخطوة الأنسب.</string>
+    <string name="onboarding_name_prompt">ما هو اسمك الكريم؟</string>
+    <string name="onboarding_name_hint">اسمك أو اللقب المفضل</string>
+    <string name="onboarding_focus_prompt">ما هو تركيزك الأساسي الآن؟</string>
+    
+    <!-- Empty States & Discovery -->
+    <string name="empty_home_title">لنبدأ ببناء يومك.</string>
+    <string name="empty_home_sub">مساحتك فارغة حالياً — وهذا ممتاز! أضف أول مهمة، تذكير، عادة، هدف أو مصروف.</string>
+    <string name="empty_tasks_title">قائمة مهامك فارغة تماماً.</string>
+    <string name="empty_tasks_sub">ابدأ بشيء واحد فقط تريد إنجازه اليوم.</string>
+    <string name="empty_money_title">لم تسجل أي مصاريف حتى الآن.</string>
+    <string name="empty_money_sub">سجل مصاريفك بثوانٍ معدودة بدون تعقيدات محاسبية.</string>
+    <string name="empty_habits_title">ابنِ عادة صغيرة تدوم.</string>
+    <string name="empty_habits_sub">الخطوات اليومية البسيطة تصنع تحولات كبرى.</string>
+    <string name="empty_goals_title">ما الهدف الذي تسعى لتحقيقه؟</string>
+    <string name="empty_goals_sub">حول أهدافك الكبيرة إلى خطوات عملية واضحة.</string>
+    <string name="empty_notes_title">احفظ أفكارك المهمة هنا.</string>
+    <string name="empty_notes_sub">أفكار سريعة وملاحظات واضحة في متناول يدك دائماً.</string>
+    
+    <!-- Hero feature -->
+    <string name="hero_what_should_i_do">أعمل إيه دلوقتي؟</string>
+    <string name="hero_what_should_i_do_ar">أعمل إيه دلوقتي؟</string>
+    <string name="hero_analyzing">جاري تحليل جدولك، مهامك وأولوياتك…</string>
+    <string name="hero_no_tasks_msg">أنت منجز لكل مهامك الحالية! أضف مهمة جديدة أو استمتع باستراحة مستحقة.</string>
+    <string name="hero_best_next_step">الخطوة الأنسب لك الآن</string>
+    <string name="hero_why">لماذا هذه المهمة الآن؟</string>
+    <string name="hero_action_start">ابدأ الآن</string>
+    <string name="hero_action_complete">تم الإنجاز</string>
+    <string name="hero_action_reschedule">تأجيل</string>
+    <string name="hero_action_another">اقتراح آخر</string>
+    
+    <!-- Common Actions -->
+    <string name="action_add_something">+ أضف جديد</string>
+    <string name="action_add_task">+ مهمة</string>
+    <string name="action_add_expense">+ مصروف</string>
+    <string name="action_add_habit">+ عادة</string>
+    <string name="action_add_goal">+ هدف</string>
+    <string name="action_add_note">+ ملاحظة</string>
+    <string name="action_save">حفظ</string>
+    <string name="action_cancel">إلغاء</string>
+    <string name="action_delete">حذف</string>
+    <string name="action_edit">تعديل</string>
+    <string name="action_search">بحث في كل شيء…</string>
+    <string name="action_apply_plan">تطبيق الجدول على اليوم</string>
+</resources>

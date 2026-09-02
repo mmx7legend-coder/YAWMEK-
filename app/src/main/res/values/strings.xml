@@ -1,0 +1,83 @@
+<resources>
+    <string name="app_name">YAWMEK</string>
+    <string name="app_tagline">Your day. Your time. Your life. In one place.</string>
+    <string name="arabic_app_name">يومك</string>
+    <string name="arabic_tagline">يومك كله... في مكان واحد.</string>
+    
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_plan">Plan</string>
+    <string name="nav_money">Money</string>
+    <string name="nav_habits">Habits</string>
+    <string name="nav_goals">Goals</string>
+    <string name="nav_notes">Notes</string>
+    <string name="nav_games">Games</string>
+    <string name="nav_ai">YAWMEK AI</string>
+    <string name="nav_profile">Profile</string>
+    
+    <!-- Games -->
+    <string name="games_title">YAWMEK GAMES</string>
+    <string name="games_subtitle">Train your brain. Beat your best.</string>
+    <string name="games_daily_challenge">Today\'s Challenge</string>
+    <string name="games_train_brain">Train Your Brain 🧠</string>
+    <string name="games_train_brain_sub">Take a 5-minute intelligent challenge</string>
+    
+    <!-- Onboarding -->
+    <string name="onboarding_get_started">Get Started</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_finish">Let\'s Build Your Day</string>
+    <string name="onboarding_title_1">Your day, organized.</string>
+    <string name="onboarding_sub_1">Tasks, plans, money, habits, and goals — beautifully connected.</string>
+    <string name="onboarding_title_2">Never forget what matters.</string>
+    <string name="onboarding_sub_2">Capture actions instantly with natural language or smart shortcuts.</string>
+    <string name="onboarding_title_3">See your day at a glance.</string>
+    <string name="onboarding_sub_3">A visual timeline highlighting your events, tasks, and real free time.</string>
+    <string name="onboarding_title_4">Know where your money goes.</string>
+    <string name="onboarding_sub_4">Fast expense logging and clear daily &amp; monthly budgets.</string>
+    <string name="onboarding_title_5">Intelligent daily guidance.</string>
+    <string name="onboarding_sub_5">Ask \"What should I do now?\" and let YAWMEK guide your next best step.</string>
+    <string name="onboarding_name_prompt">What should we call you?</string>
+    <string name="onboarding_name_hint">Your name or nickname</string>
+    <string name="onboarding_focus_prompt">What matters most to you right now?</string>
+    
+    <!-- Empty States & Discovery -->
+    <string name="empty_home_title">Let\'s build your day.</string>
+    <string name="empty_home_sub">Your workspace is empty — that\'s okay. Add your first task, reminder, habit, goal, or expense.</string>
+    <string name="empty_tasks_title">Your task list is clear.</string>
+    <string name="empty_tasks_sub">Start with one thing you need to do today.</string>
+    <string name="empty_money_title">No spending recorded yet.</string>
+    <string name="empty_money_sub">Track your spending without complicated accounting.</string>
+    <string name="empty_habits_title">Build one small routine.</string>
+    <string name="empty_habits_sub">Small daily actions become lasting lifelong habits.</string>
+    <string name="empty_goals_title">What are you working toward?</string>
+    <string name="empty_goals_sub">Turn big aspirations into actionable milestones.</string>
+    <string name="empty_notes_title">Keep the important things here.</string>
+    <string name="empty_notes_sub">Fast ideas, meeting points, and thoughts in one place.</string>
+    
+    <!-- Hero feature -->
+    <string name="hero_what_should_i_do">What should I do now?</string>
+    <string name="hero_what_should_i_do_ar">أعمل إيه دلوقتي؟</string>
+    <string name="hero_analyzing">Analyzing your schedule, tasks &amp; priorities…</string>
+    <string name="hero_no_tasks_msg">You are completely caught up! Add a new task or take a mindful break.</string>
+    <string name="hero_best_next_step">Best next step</string>
+    <string name="hero_why">Why this now?</string>
+    <string name="hero_action_start">Start Now</string>
+    <string name="hero_action_complete">Mark Done</string>
+    <string name="hero_action_reschedule">Reschedule</string>
+    <string name="hero_action_another">Choose Another</string>
+    
+    <!-- Common Actions -->
+    <string name="action_add_something">+ Add Something</string>
+    <string name="action_add_task">+ Task</string>
+    <string name="action_add_expense">+ Expense</string>
+    <string name="action_add_habit">+ Habit</string>
+    <string name="action_add_goal">+ Goal</string>
+    <string name="action_add_note">+ Note</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_search">Search everything…</string>
+    <string name="action_apply_plan">Apply Plan to Today</string>
+</resources>
