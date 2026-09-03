@@ -9,40 +9,38 @@ enum class MoneyTransactionType {
 }
 
 enum class MoneyCategory {
-    // Income
     SALARY, FREELANCE, INVESTMENT, BONUS, GIFT, OTHER_INCOME,
-    // Expense
     FOOD, TRANSPORT, EDUCATION, SHOPPING, BILLS, ENTERTAINMENT, HEALTH, UTILITIES, RENT, GROCERIES, OTHER_EXPENSE
 }
 
-// Wallet/Account entity
+// Wallet entity
 @Entity(tableName = "wallets")
 data class WalletEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
-    val accountType: String = "CHECKING", // CHECKING, SAVINGS, CASH, CARD
+    val accountType: String = "CHECKING",
     val currency: String = "EGP",
-    val balance: Long = 0L, // In minor units (cents, fils, etc.)
+    val balance: Long = 0L,
     val isDefault: Boolean = false,
     val colorHex: String = "#3B82F6",
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Transaction entity (unified for income, expense, transfer)
+// Transaction entity
 @Entity(tableName = "transactions")
 data class TransactionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val walletId: Long,
     val type: MoneyTransactionType = MoneyTransactionType.EXPENSE,
-    val amount: Long = 0L, // In minor units
+    val amount: Long = 0L,
     val currency: String = "EGP",
     val category: MoneyCategory = MoneyCategory.OTHER_EXPENSE,
     val description: String = "",
     val dateMillis: Long = System.currentTimeMillis(),
     val isRecurring: Boolean = false,
-    val recurringPattern: String = "", // DAILY, WEEKLY, MONTHLY, YEARLY
+    val recurringPattern: String = "",
     val recurringEndDate: Long? = null,
-    val tags: String = "", // Comma-separated
+    val tags: String = "",
     val attachmentPath: String? = null,
     val createdAtMillis: Long = System.currentTimeMillis()
 )
@@ -54,8 +52,8 @@ data class SavingsGoalEntity(
     val walletId: Long,
     val title: String,
     val description: String = "",
-    val targetAmount: Long = 0L, // In minor units
-    val currentAmount: Long = 0L, // In minor units
+    val targetAmount: Long = 0L,
+    val currentAmount: Long = 0L,
     val currency: String = "EGP",
     val targetDateMillis: Long? = null,
     val category: String = "General",
@@ -64,48 +62,48 @@ data class SavingsGoalEntity(
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Savings goal contribution
+// Goal contribution
 @Entity(tableName = "goal_contributions")
 data class GoalContributionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val goalId: Long,
-    val amount: Long = 0L, // In minor units
+    val amount: Long = 0L,
     val dateMillis: Long = System.currentTimeMillis(),
     val note: String = "",
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Financial summary (calculated/cached)
+// Financial summary
 @Entity(tableName = "financial_summaries")
 data class FinancialSummaryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val walletId: Long,
-    val period: String = "MONTHLY", // DAILY, WEEKLY, MONTHLY, YEARLY
+    val period: String = "MONTHLY",
     val periodStartMillis: Long,
     val periodEndMillis: Long,
-    val totalIncome: Long = 0L, // In minor units
-    val totalExpense: Long = 0L, // In minor units
-    val netSavings: Long = 0L, // totalIncome - totalExpense
-    val savingsRate: Double = 0.0, // savingsRate = netSavings / totalIncome * 100
+    val totalIncome: Long = 0L,
+    val totalExpense: Long = 0L,
+    val netSavings: Long = 0L,
+    val savingsRate: Double = 0.0,
     val topExpenseCategory: String = "",
-    val averageDailyExpense: Long = 0L, // In minor units
+    val averageDailyExpense: Long = 0L,
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Transfer between wallets
+// Transfer
 @Entity(tableName = "transfers")
 data class TransferEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val fromWalletId: Long,
     val toWalletId: Long,
-    val amount: Long = 0L, // In minor units
+    val amount: Long = 0L,
     val currency: String = "EGP",
     val description: String = "",
     val dateMillis: Long = System.currentTimeMillis(),
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Calendar Event entity
+// Calendar Event
 @Entity(tableName = "calendar_events")
 data class CalendarEventEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -117,14 +115,14 @@ data class CalendarEventEntity(
     val location: String = "",
     val colorHex: String = "#3B82F6",
     val isRecurring: Boolean = false,
-    val recurringPattern: String = "", // DAILY, WEEKLY, MONTHLY, YEARLY
+    val recurringPattern: String = "",
     val reminderMinutesBefore: Int = 15,
-    val category: String = "OTHER", // WORK, PERSONAL, HEALTH, FINANCE, EVENT
+    val category: String = "OTHER",
     val notes: String = "",
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Enhanced Focus Session Models
+// Enhanced Focus Session
 enum class FocusAudioType(val titleEn: String, val titleAr: String) {
     SILENT("Silent", "صامت"),
     RAIN("Rain", "مطر"),
