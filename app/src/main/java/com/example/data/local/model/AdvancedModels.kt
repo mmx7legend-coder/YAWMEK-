@@ -3,7 +3,6 @@ package com.example.data.local.model
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-// Money system enums
 enum class MoneyTransactionType {
     INCOME, EXPENSE, TRANSFER
 }
@@ -13,7 +12,6 @@ enum class MoneyCategory {
     FOOD, TRANSPORT, EDUCATION, SHOPPING, BILLS, ENTERTAINMENT, HEALTH, UTILITIES, RENT, GROCERIES, OTHER_EXPENSE
 }
 
-// Wallet entity
 @Entity(tableName = "wallets")
 data class WalletEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -26,7 +24,6 @@ data class WalletEntity(
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Transaction entity
 @Entity(tableName = "transactions")
 data class TransactionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -45,7 +42,6 @@ data class TransactionEntity(
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Savings goal
 @Entity(tableName = "savings_goals")
 data class SavingsGoalEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -62,7 +58,6 @@ data class SavingsGoalEntity(
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Goal contribution
 @Entity(tableName = "goal_contributions")
 data class GoalContributionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -73,7 +68,6 @@ data class GoalContributionEntity(
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Financial summary
 @Entity(tableName = "financial_summaries")
 data class FinancialSummaryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -90,7 +84,6 @@ data class FinancialSummaryEntity(
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Transfer
 @Entity(tableName = "transfers")
 data class TransferEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -103,7 +96,6 @@ data class TransferEntity(
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Calendar Event
 @Entity(tableName = "calendar_events")
 data class CalendarEventEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -122,7 +114,6 @@ data class CalendarEventEntity(
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Enhanced Focus Session
 enum class FocusAudioType(val titleEn: String, val titleAr: String) {
     SILENT("Silent", "صامت"),
     RAIN("Rain", "مطر"),
@@ -150,7 +141,6 @@ data class FocusSessionV2Entity(
     val xpEarned: Int = 0
 )
 
-// Focus Statistics
 @Entity(tableName = "focus_statistics")
 data class FocusStatisticsEntity(
     @PrimaryKey val id: Int = 1,
