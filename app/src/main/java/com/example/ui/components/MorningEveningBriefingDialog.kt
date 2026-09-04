@@ -9,7 +9,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -137,11 +137,18 @@ fun EveningSummaryDialog(
     unfinishedTasks: List<TaskEntity>,
     todaySpent: Double,
     currency: String,
-    onMoveUnfinishedToTomorrow: () -> Unit,
+    onMoveUnfinishedToTomorrow: () -> Unit = {},
+    onMoveSelectedToTomorrow: ((List<TaskEntity>) -> Unit)? = null,
+    onMarkSelectedAsSkipped: ((List<TaskEntity>) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val isArabic = language == AppLanguage.ARABIC
     val greeting = if (isArabic) "مساء الخير يا $userName 🌙" else "Good evening, $userName 🌙"
+
+    // Task selection state for Daily Reset
+    var selectedTaskIds by remember(unfinishedTasks) {
+        mutableStateOf(unfinishedTasks.map { it.id }.toSet())
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -182,7 +189,7 @@ fun EveningSummaryDialog(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = if (isArabic) "مراجعة إنجازات اليوم" else "Daily evening review",
+                    text = if (isArabic) "مراجعة إنجازات اليوم والتهيئة للغد" else "Daily evening review & fresh reset",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -211,43 +218,139 @@ fun EveningSummaryDialog(
                         BriefingRow(
                             icon = Icons.Filled.PendingActions,
                             iconTint = BrandAmber,
-                            title = if (isArabic) "مهام متبقية" else "Unfinished Tasks",
+                            title = if (isArabic) "مهام غير مكتملة" else "Unfinished Tasks",
                             value = "${unfinishedTasks.size}"
                         )
                     }
                 }
 
+                // Daily Reset Section
                 if (unfinishedTasks.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(20.dp))
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
                             .padding(14.dp)
                     ) {
                         Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (isArabic) "إعادة ضبط المهام المتبقية" else "Daily Reset for Unfinished Tasks",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                TextButton(
+                                    onClick = {
+                                        selectedTaskIds = if (selectedTaskIds.size == unfinishedTasks.size) {
+                                            emptySet()
+                                        } else {
+                                            unfinishedTasks.map { it.id }.toSet()
+                                        }
+                                    }
+                                ) {
+                                    Text(
+                                        text = if (selectedTaskIds.size == unfinishedTasks.size) {
+                                            if (isArabic) "إلغاء التحديد" else "Deselect"
+                                        } else {
+                                            if (isArabic) "تحديد الكل" else "Select All"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+
                             Text(
-                                text = if (isArabic) "نقل المهام المتبقية إلى الغد؟" else "Move unfinished tasks to tomorrow?",
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = if (isArabic) "تلقائياً تحديث موعد ${unfinishedTasks.size} مهام لتبدأ بها غداً بنشاط." else "Reschedule ${unfinishedTasks.size} items to start fresh tomorrow.",
+                                text = if (isArabic) "اختر المهام لنقلها إلى الغد أو تخطيها لإبقاء جدولك نظيفاً:" else "Select tasks to reschedule for tomorrow or mark as skipped:",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+
                             Spacer(modifier = Modifier.height(10.dp))
-                            Button(
-                                onClick = {
-                                    onMoveUnfinishedToTomorrow()
-                                    onDismiss()
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+
+                            // List of tasks with checkboxes
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text(if (isArabic) "نعم، انقلها للغد" else "Yes, Move to Tomorrow")
+                                unfinishedTasks.forEach { task ->
+                                    val isSelected = selectedTaskIds.contains(task.id)
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(MaterialTheme.colorScheme.surface)
+                                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Checkbox(
+                                            checked = isSelected,
+                                            onCheckedChange = { checked ->
+                                                selectedTaskIds = if (checked) {
+                                                    selectedTaskIds + task.id
+                                                } else {
+                                                    selectedTaskIds - task.id
+                                                }
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = task.title,
+                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            val selectedTasks = unfinishedTasks.filter { selectedTaskIds.contains(it.id) }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Move to Tomorrow Button
+                                Button(
+                                    onClick = {
+                                        if (onMoveSelectedToTomorrow != null) {
+                                            onMoveSelectedToTomorrow(if (selectedTasks.isNotEmpty()) selectedTasks else unfinishedTasks)
+                                        } else {
+                                            onMoveUnfinishedToTomorrow()
+                                        }
+                                        onDismiss()
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = if (isArabic) "نقل للغد" else "To Tomorrow",
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                }
+
+                                // Mark as Skipped Button
+                                OutlinedButton(
+                                    onClick = {
+                                        onMarkSelectedAsSkipped?.invoke(if (selectedTasks.isNotEmpty()) selectedTasks else unfinishedTasks)
+                                        onDismiss()
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = if (isArabic) "تخطي" else "Mark Skipped",
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                }
                             }
                         }
                     }

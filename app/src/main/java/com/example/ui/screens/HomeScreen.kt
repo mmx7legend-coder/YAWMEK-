@@ -18,17 +18,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.model.*
-import com.example.ui.components.EmptyStateCard
-import com.example.ui.components.QuickAddTab
-import com.example.ui.components.WhatShouldIDoNowHeroCard
+import com.example.domain.audio.SoundHapticManager
+import com.example.ui.components.*
+import com.example.ui.components.rpg.HomeRpgBanner
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.YawmekUiState
 import java.time.LocalDate
@@ -238,6 +240,15 @@ fun HomeScreen(
             }
         }
 
+        // RPG Character Progression Hero Card
+        item {
+            HomeRpgBanner(
+                character = uiState.rpgCharacter,
+                isArabic = isArabic,
+                onOpenAdventure = { onNavigateToTab("adventure") }
+            )
+        }
+
         // Calendar Connect / Upcoming Calendar Event Banner
         item {
             if (uiState.isCalendarPermissionGranted && uiState.calendarEvents.isNotEmpty()) {
@@ -441,6 +452,72 @@ fun HomeScreen(
             }
         }
 
+        // YAWMEK Community Arena Quick Card
+        item {
+            Surface(
+                onClick = { onNavigateToTab("community") },
+                shape = RoundedCornerShape(16.dp),
+                color = SapphirePrimary.copy(alpha = 0.08f),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = Brush.horizontalGradient(
+                        listOf(SapphirePrimary.copy(alpha = 0.4f), ColorRpg.copy(alpha = 0.3f))
+                    )
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("home_community_card")
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(SapphirePrimary.copy(alpha = 0.18f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "⚔️", fontSize = 20.sp)
+                        }
+                        Column {
+                            Text(
+                                text = if (isArabic) "مجتمع يومك ومبارزات الإنتاجية ⚔️" else "YAWMEK Community & Battles ⚔️",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            val friendCount = uiState.communityFriends.size
+                            Text(
+                                text = if (isArabic) "$friendCount أصدقاء • تحديات RPG وتركيز" else "$friendCount friends • RPG & Focus battles",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = SapphirePrimary
+                    ) {
+                        Text(
+                            text = if (isArabic) "ادخل الحلبة" else "Enter",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+        }
+
         // 3. Signature Hero Card: WHAT SHOULD I DO NOW?
         item {
             WhatShouldIDoNowHeroCard(
@@ -608,14 +685,13 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.height(12.dp))
                             val progress = (uiState.monthlySpending / uiState.monthlyBudget).coerceIn(0.0, 1.0).toFloat()
                             val isNearLimit = progress >= 0.8f
-                            LinearProgressIndicator(
-                                progress = { progress },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp)),
-                                color = if (isNearLimit) SemanticWarning else ColorFinance,
-                                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                            YawmekProgressBar(
+                                progress = progress,
+                                fillBrush = Brush.horizontalGradient(
+                                    if (isNearLimit) listOf(SemanticWarning, SemanticError)
+                                    else listOf(ColorFinance, SapphireAccent)
+                                ),
+                                height = 8.dp
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Row(
@@ -688,14 +764,10 @@ fun HomeScreen(
                         }
                         if (totalCount > 0) {
                             Spacer(modifier = Modifier.height(10.dp))
-                            LinearProgressIndicator(
-                                progress = { progress },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(3.dp)),
-                                color = ColorGoal,
-                                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                            YawmekProgressBar(
+                                progress = progress,
+                                fillBrush = Brush.horizontalGradient(listOf(ColorGoal, BrandAmberLight)),
+                                height = 7.dp
                             )
                         }
                     }
@@ -736,19 +808,10 @@ fun TaskCardRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            IconButton(
-                onClick = onToggle,
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (task.isCompleted) SemanticSuccess else MaterialTheme.colorScheme.surfaceVariant
-                    )
-            ) {
-                if (task.isCompleted) {
-                    Icon(Icons.Filled.Check, contentDescription = "Done", tint = Color.White, modifier = Modifier.size(16.dp))
-                }
-            }
+            YawmekTaskCheckbox(
+                isChecked = task.isCompleted,
+                onCheckedChange = onToggle
+            )
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -801,8 +864,18 @@ fun HabitQuickChip(
     isCompletedToday: Boolean,
     onToggle: () -> Unit
 ) {
+    val context = LocalContext.current
+    val soundManager = remember { SoundHapticManager.getInstance(context) }
+
     Surface(
-        onClick = onToggle,
+        onClick = {
+            if (!isCompletedToday) {
+                soundManager.playHabitCompleted()
+            } else {
+                soundManager.playTap()
+            }
+            onToggle()
+        },
         shape = RoundedCornerShape(16.dp),
         color = if (isCompletedToday) SemanticSuccess.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
         border = CardDefaults.outlinedCardBorder().copy(

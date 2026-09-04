@@ -19,6 +19,8 @@ enum class AppDestination(
     GOALS("goals", "Goals", "الأهداف", Icons.Filled.Flag, Icons.Outlined.Flag),
     NOTES("notes", "Notes", "الملاحظات", Icons.Filled.Description, Icons.Outlined.Description),
     GAMES("games", "Games", "الألعاب", Icons.Filled.SportsEsports, Icons.Outlined.SportsEsports),
+    COMMUNITY("community", "Community", "المجتمع", Icons.Filled.Groups, Icons.Outlined.Groups),
+    ADVENTURE("adventure", "Adventure RPG", "مغامرة RPG", Icons.Filled.Shield, Icons.Outlined.Shield),
     AI("ai", "YAWMEK AI", "مساعد يومك", Icons.Filled.AutoAwesome, Icons.Outlined.AutoAwesome),
     PROFILE("profile", "Profile", "الحساب", Icons.Filled.Person, Icons.Outlined.Person)
 }

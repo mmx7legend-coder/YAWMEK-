@@ -14,12 +14,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.model.AppLanguage
 import com.example.data.local.model.ThemeMode
+import com.example.domain.audio.SoundHapticManager
 import com.example.ui.theme.BrandAmber
 import com.example.ui.theme.BrandBlue
 import com.example.ui.theme.SemanticError
@@ -370,6 +372,90 @@ fun ProfileScreen(
                                 modifier = Modifier.weight(1f)
                             )
                         }
+                    }
+                }
+            }
+        }
+
+        // Sound & Haptic Feedback Setting
+        item {
+            val context = LocalContext.current
+            val soundManager = remember { SoundHapticManager.getInstance(context) }
+            var isSoundEnabled by remember { mutableStateOf(soundManager.isSoundEnabled) }
+            var isHapticsEnabled by remember { mutableStateOf(soundManager.isHapticsEnabled) }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = CardDefaults.outlinedCardBorder()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(Icons.Filled.VolumeUp, contentDescription = null, tint = BrandAmber)
+                        Text(
+                            text = if (isArabic) "الأصوات والتفاعل اللمسي" else "Sound & Haptic Feedback",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isArabic) "المؤثرات الصوتية الدقيقة" else "Subtle Sound Effects",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                            )
+                            Text(
+                                text = if (isArabic) "نغمات هادئة عند إنجاز المهام والعادات" else "Calm feedback when finishing tasks & habits",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = isSoundEnabled,
+                            onCheckedChange = {
+                                isSoundEnabled = it
+                                soundManager.isSoundEnabled = it
+                                if (it) soundManager.playTaskCompleted()
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isArabic) "الاهتزاز اللمسي (Haptics)" else "Haptic Feedback",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                            )
+                            Text(
+                                text = if (isArabic) "نبضات لمسية خفيفة مع كل نقرة وإنجاز" else "Gentle tactile pulse on taps & achievements",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = isHapticsEnabled,
+                            onCheckedChange = {
+                                isHapticsEnabled = it
+                                soundManager.isHapticsEnabled = it
+                                if (it) soundManager.playTaskCompleted()
+                            }
+                        )
                     }
                 }
             }

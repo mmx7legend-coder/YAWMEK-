@@ -84,3 +84,15 @@ interface FocusSessionDao {
     @Query("DELETE FROM focus_sessions")
     suspend fun clearAllSessions()
 }
+
+@Dao
+interface FocusPreferencesDao {
+    @Query("SELECT * FROM focus_preferences WHERE id = 1 LIMIT 1")
+    fun getPreferencesFlow(): Flow<FocusPreferencesEntity?>
+
+    @Query("SELECT * FROM focus_preferences WHERE id = 1 LIMIT 1")
+    suspend fun getPreferences(): FocusPreferencesEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdatePreferences(prefs: FocusPreferencesEntity)
+}

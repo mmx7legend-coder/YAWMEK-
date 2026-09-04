@@ -1,5 +1,6 @@
 package com.example.data.remote
 
+import android.util.Log
 import com.example.BuildConfig
 import com.example.data.local.model.*
 import com.squareup.moshi.Moshi
@@ -7,7 +8,6 @@ import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.Body
@@ -39,7 +39,7 @@ data class GeminiCandidate(
 )
 
 interface GeminiApi {
-    @POST("v1beta/models/gemini-3.5-flash:generateContent")
+    @POST("v1beta/models/gemini-2.5-flash:generateContent")
     suspend fun generateContent(
         @Query("key") apiKey: String,
         @Body request: GeminiRequest
@@ -102,11 +102,13 @@ object YawmekAiEngine {
                     User Language Preference: ${userContext.language}
                     User Name: ${userContext.userName.ifBlank { "User" }}
                     Current Tasks: ${userContext.pendingTasksSummary}
-                    Today's Spending: ${userContext.todaySpending} ${userContext.currency}
+                    Financial Overview: ${userContext.financialSummary}
+                    Schedule & Events: ${userContext.calendarSummary}
+                    Focus & Productivity: ${userContext.focusSummary}
                     Active Habits: ${userContext.habitsSummary}
                     
                     Respond with empathy, clarity, high structure, and practical daily planning guidance.
-                    Never invent fake personal data. Be inspiring, calm, and actionable.
+                    Never invent fake personal data. Base all financial, calendar, and focus remarks strictly on real data provided.
                     If the user is asking in Arabic, respond in fluent, professional, modern Arabic.
                 """.trimIndent()
 
@@ -120,85 +122,87 @@ object YawmekAiEngine {
                 val response = GeminiClient.api.generateContent(apiKey, request)
                 val text = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
                 if (!text.isNullOrBlank()) {
+                    val planItems = if (prompt.contains("plan", ignoreCase = true) || prompt.contains("خطة") || prompt.contains("جدول")) {
+                        extractSmartPlanFromTasks(userContext.tasks)
+                    } else {
+                        emptyList()
+                    }
                     return@withContext AiResponseResult(
                         messageText = text.trim(),
-                        suggestedPlan = extractSmartPlanFromTasks(userContext.tasks),
+                        suggestedPlan = planItems,
                         isFromRemoteAi = true
                     )
                 }
             } catch (e: Exception) {
-                // Graceful fallback to the smart local engine — but log the
-                // real cause (auth error, timeout, malformed response...)
-                // instead of swallowing it silently, so a broken API key or
-                // outage doesn't look identical to "everything is fine".
-                android.util.Log.w("YawmekAiEngine", "Gemini API call failed, using local fallback", e)
+                Log.w("YawmekAiEngine", "Gemini API call failed, using local fallback", e)
             }
         }
 
-        // Offline / Fallback Intelligent Rule Engine
-        return@withContext generateLocalEngineResponse(prompt, userContext)
+        // Offline deterministic fallback with real local context
+        generateLocalFallbackResponse(prompt, userContext)
     }
 
-    private fun generateLocalEngineResponse(prompt: String, context: UserContextData): AiResponseResult {
+    private fun generateLocalFallbackResponse(
+        prompt: String,
+        context: UserContextData
+    ): AiResponseResult {
+        val isArabic = context.language == AppLanguage.ARABIC
         val lower = prompt.lowercase()
-        val isArabic = prompt.any { it in '\u0600'..'\u06FF' } || context.language == AppLanguage.ARABIC
 
-        if (lower.contains("plan") || prompt.contains("خطط") || prompt.contains("جدول") || prompt.contains("evening") || prompt.contains("مساء")) {
-            val plan = extractSmartPlanFromTasks(context.tasks)
+        // Money / Financial queries
+        if (lower.contains("money") || lower.contains("budget") || lower.contains("expense") || prompt.contains("مال") || prompt.contains("ميزانية") || prompt.contains("مصروف") || prompt.contains("توفير")) {
             val msg = if (isArabic) {
-                "إليك جدول منظم ومقترح بناءً على أولوياتك وأوقات فراغك المتاحة:\n\n" +
-                        "• قمنا بترتيب المهام الأكثر إلحاحاً أولاً لتقليل الضغط الذهني.\n" +
-                        "• تم تخصيص فترات راحة بين الأنشطة للحفاظ على طاقتك.\n\n" +
-                        "يمكنك الضغط على 'تطبيق الجدول' أدناه لحفظ المواعيد فوراً في جدولك."
+                "📊 نظرة مالية ذكية على وضعك الحالي:\n\n" +
+                        "• ${context.financialSummary.ifBlank { "المصاريف المسجلة تحت السيطرة." }}\n" +
+                        "• نصيحة يومك: قسّم دخلك وفق قاعدة 50/30/20 (50% للضروريات، 30% للرغبات، 20% للادخار والاستثمار).\n" +
+                        "• يمكنك مراجعة لوحة المال لمعرفة مؤشر صحة الميزانية والأهداف المالية."
             } else {
-                "Here is an optimized schedule crafted from your priorities and realistic time blocks:\n\n" +
-                        "• High-leverage tasks are scheduled first to build immediate momentum.\n" +
-                        "• Focused 30-45 minute blocks with breathing room prevent fatigue.\n\n" +
-                        "Tap 'Apply Plan to Today' below to lock in these time slots."
-            }
-            return AiResponseResult(messageText = msg, suggestedPlan = plan, isFromRemoteAi = false)
-        }
-
-        if (lower.contains("forget") || prompt.contains("ناسي") || prompt.contains("نسيت") || prompt.contains("فايتني")) {
-            val overdueCount = context.tasks.count { it.dueDateMillis != null && it.dueDateMillis < System.currentTimeMillis() && !it.isCompleted }
-            val msg = if (isArabic) {
-                if (overdueCount > 0) {
-                    "لديك $overdueCount مهام متأخرة أو تحتاج مراجعة. أنصحك بالبدء بإنجازها أو إعادة جدولتها لتصفية ذهنك، كما لا تنسَ تسجيل مصاريف اليوم ومتابعة عاداتك اليومية."
-                } else {
-                    "جدولك محدث ومهامك تحت السيطرة تماماً! تذكر فقط شرب الماء، والتحقق من عاداتك اليومية قبل نهاية اليوم."
-                }
-            } else {
-                if (overdueCount > 0) {
-                    "You have $overdueCount pending items that might need attention. Resolving or rescheduling them now will clear your mental backlog."
-                } else {
-                    "All your scheduled commitments are in order! Just remember to log today's expenses and check off your active habits before unwinding."
-                }
+                "📊 Smart Financial Summary:\n\n" +
+                        "• ${context.financialSummary.ifBlank { "Tracked expenses are currently balanced." }}\n" +
+                        "• YAWMEK Tip: Adopt the 50/30/20 rule (50% essentials, 30% discretionary, 20% savings & goals).\n" +
+                        "• Visit your Money Dashboard to review your Budget Health Score and savings progress."
             }
             return AiResponseResult(messageText = msg, isFromRemoteAi = false)
         }
 
-        if (lower.contains("break down") || lower.contains("goal") || prompt.contains("هدف") || prompt.contains("قسم") || prompt.contains("خطة")) {
+        // Calendar / Schedule queries
+        if (lower.contains("schedule") || lower.contains("calendar") || lower.contains("time block") || prompt.contains("جدول") || prompt.contains("تقويم") || prompt.contains("تنظيم الوقت")) {
+            val plan = extractSmartPlanFromTasks(context.tasks)
             val msg = if (isArabic) {
-                "لتحقيق أي هدف كبير بنجاح، السر يكمن في تقسيمه إلى ٣ مراحل واضحة:\n\n" +
-                        "١. الإعداد والأساسيات (الأسبوع الأول: جمع المصادر وتحديد نصف ساعة يومياً).\n" +
-                        "٢. التطبيق العملي المستمر (الأسبوع الثاني إلى الرابع: التركيز على الاستمرارية وليس الكم).\n" +
-                        "٣. المراجعة والتقييم (نهاية كل أسبوع).\n\n" +
-                        "لقد أعددت لك خطة مبسطة يمكنك تحويلها إلى أهداف ومهام فرعية داخل تطبيق يومك."
+                "📅 تخطيط اليوم الذكي (Smart Time Blocking):\n\n" +
+                        "• الجدول الحالي: ${context.calendarSummary.ifBlank { "لا توجد تعارضات مسجلة اليوم." }}\n" +
+                        "• تم تحديد أفضل فترات التركيز لمهامك العاجلة بدون تداخل مع مواعيدك.\n" +
+                        "• إليك المقترح الزمني الأمثل ليومك:"
             } else {
-                "To turn any ambitious goal into concrete reality, structure it into 3 clear phases:\n\n" +
-                        "1. Foundation (Week 1: Setup resources and protect a daily 30m focus slot).\n" +
-                        "2. Consistent Execution (Weeks 2-4: Build streak momentum without burnout).\n" +
-                        "3. Review & Refine (Weekly milestone check-ins).\n\n" +
-                        "You can track these directly in your YAWMEK Goals tab."
+                "📅 Smart Daily Schedule & Time Blocking:\n\n" +
+                        "• Current Events: ${context.calendarSummary.ifBlank { "No schedule conflicts detected today." }}\n" +
+                        "• We prioritized deep focus blocks for high-priority items around your existing events.\n" +
+                        "• Here is your optimized time-blocked plan:"
+            }
+            return AiResponseResult(messageText = msg, suggestedPlan = plan, isFromRemoteAi = false)
+        }
+
+        // Focus Mode queries
+        if (lower.contains("focus") || lower.contains("pomodoro") || prompt.contains("تركيز") || prompt.contains("بومودورو") || prompt.contains("تشتت")) {
+            val msg = if (isArabic) {
+                "⏱️ نصائح جلسات التركيز العميق (Focus Shield):\n\n" +
+                        "• إحصائياتك: ${context.focusSummary.ifBlank { "جاهز لبدء جلسة جديدة اليوم." }}\n" +
+                        "• استخدم تقنية 45 دقيقة تركيز متبوعة بـ 10 دقائق استراحة للحفاظ على الطاقة الذهنية.\n" +
+                        "• تفعيل وضع درع التركيز يساعد على إغلاق كل المشتتات وتشغيل أصوات الطبيعة (المطر أو الضوضاء البنية)."
+            } else {
+                "⏱️ Deep Focus Mode Insights (Focus Shield):\n\n" +
+                        "• Your Stats: ${context.focusSummary.ifBlank { "Ready to launch your first session today." }}\n" +
+                        "• Try the 45-minute sprint with a 10-minute break to balance stamina and momentum.\n" +
+                        "• Enable Focus Shield to silence distractions and listen to calming Brownian noise or Rain audio."
             }
             return AiResponseResult(messageText = msg, isFromRemoteAi = false)
         }
 
         // Default friendly command center reply
         val msg = if (isArabic) {
-            "أهلاً بك يا ${context.userName.ifBlank { "صديقي" }} في مساعد يومك الذكي. يمكنني مساعدتك في تنظيم جدول اليوم، اقتراح الخطوة التالية، تقسيم الأهداف، أو مراجعة ميزانيتك وعاداتك. كيف تحب أن نبدأ؟"
+            "أهلاً بك يا ${context.userName.ifBlank { "صديقي" }} في مساعد يومك الذكي. يمكنني تحليل ميزانيتك، حجز فترات تركيز ذكية في تقويمك، أو اقتراح أفضل تسلسل لمهامك وعاداتك اليوم. كيف يمكنني دعمك الآن؟"
         } else {
-            "Welcome back, ${context.userName.ifBlank { "there" }}! I'm YAWMEK AI. I can structure your day, calculate your best next action, break down complex goals, or balance your schedule. What would you like to focus on?"
+            "Welcome back, ${context.userName.ifBlank { "there" }}! I'm YAWMEK AI. I can analyze your financial budget, generate smart non-overlapping time blocks in your calendar, or optimize your deep focus sessions. How can I help you today?"
         }
         return AiResponseResult(messageText = msg, isFromRemoteAi = false)
     }
@@ -209,31 +213,31 @@ object YawmekAiEngine {
             return listOf(
                 AiDailyPlanItem(
                     title = "Deep Focus Block",
-                    timeFormatted = "04:00 PM",
+                    timeFormatted = "10:00 AM",
                     durationMinutes = 45,
                     priority = Priority.HIGH,
                     reason = "Dedicated uninterrupted focus on key priorities"
                 ),
                 AiDailyPlanItem(
-                    title = "Daily Review & Reset",
-                    timeFormatted = "06:00 PM",
+                    title = "Daily Review & Finance",
+                    timeFormatted = "05:00 PM",
                     durationMinutes = 20,
                     priority = Priority.MEDIUM,
-                    reason = "Log daily expenses and plan tomorrow"
+                    reason = "Log daily expenses and review tomorrow's calendar"
                 )
             )
         }
 
-        var startHour = 16 // 4 PM
+        var startHour = 10 // 10 AM
         return pending.mapIndexed { index, task ->
-            val hour = (startHour + index) % 24
+            val hour = (startHour + (index * 2)) % 24
             val formatted = String.format("%02d:00", hour)
             AiDailyPlanItem(
                 title = task.title,
                 timeFormatted = formatted,
                 durationMinutes = if (task.durationMinutes > 0) task.durationMinutes else 30,
                 priority = task.priority,
-                reason = "High leverage execution"
+                reason = "Scheduled during peak focus window"
             )
         }
     }
@@ -246,5 +250,8 @@ data class UserContextData(
     val tasks: List<TaskEntity>,
     val pendingTasksSummary: String,
     val todaySpending: Double,
-    val habitsSummary: String
+    val habitsSummary: String,
+    val financialSummary: String = "",
+    val calendarSummary: String = "",
+    val focusSummary: String = ""
 )

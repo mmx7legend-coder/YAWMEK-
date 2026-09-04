@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -22,8 +23,10 @@ import com.example.data.local.model.AppLanguage
 import com.example.data.local.model.Priority
 import com.example.data.local.model.TaskCategory
 import com.example.data.local.model.TaskEntity
+import com.example.domain.audio.SoundHapticManager
 import com.example.ui.components.*
 import com.example.ui.games.GamesHomeScreen
+import com.example.ui.screens.rpg.AdventureScreen
 import com.example.ui.navigation.AppDestination
 import com.example.ui.screens.*
 import com.example.ui.theme.*
@@ -34,6 +37,8 @@ import kotlinx.coroutines.delay
 fun YawmekApp(
     viewModel: YawmekViewModel = viewModel()
 ) {
+    val context = LocalContext.current
+    val soundManager = remember { SoundHapticManager.getInstance(context) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     var showSplash by remember { mutableStateOf(true) }
@@ -79,14 +84,19 @@ fun YawmekApp(
                                     AppDestination.PLAN,
                                     AppDestination.MONEY,
                                     AppDestination.HABITS,
-                                    AppDestination.GAMES,
+                                    AppDestination.COMMUNITY,
                                     AppDestination.AI,
                                     AppDestination.PROFILE
                                 ).forEach { dest ->
                                     val isSelected = currentDestination == dest
                                     NavigationBarItem(
                                         selected = isSelected,
-                                        onClick = { currentDestination = dest },
+                                        onClick = {
+                                            if (currentDestination != dest) {
+                                                soundManager.playTap()
+                                                currentDestination = dest
+                                            }
+                                        },
                                         icon = {
                                             Icon(
                                                 imageVector = if (isSelected) dest.selectedIcon else dest.unselectedIcon,
@@ -110,7 +120,10 @@ fun YawmekApp(
                         floatingActionButton = {
                             if (currentDestination == AppDestination.HOME) {
                                 FloatingActionButton(
-                                    onClick = { quickAddSheetTab = QuickAddTab.TASK },
+                                    onClick = {
+                                        soundManager.playTap()
+                                        quickAddSheetTab = QuickAddTab.TASK
+                                    },
                                     containerColor = MaterialTheme.colorScheme.primary,
                                     contentColor = MaterialTheme.colorScheme.onPrimary,
                                     shape = CircleShape,
@@ -126,114 +139,186 @@ fun YawmekApp(
                                 .fillMaxSize()
                                 .padding(innerPadding)
                         ) {
-                            when (currentDestination) {
-                                AppDestination.HOME -> {
-                                    HomeScreen(
-                                        uiState = uiState,
-                                        onOpenQuickAdd = { tab -> quickAddSheetTab = tab },
-                                        onToggleTask = { task -> viewModel.toggleTask(task) },
-                                        onDeleteTask = { task -> viewModel.deleteTask(task) },
-                                        onRescheduleTask = { task ->
-                                            viewModel.rescheduleTask(task, System.currentTimeMillis() + 86400000, null)
-                                        },
-                                        onToggleHabit = { habitId -> viewModel.toggleHabit(habitId) },
-                                        onOpenAi = { currentDestination = AppDestination.AI },
-                                        onOpenSearch = { showSearchDialog = true },
-                                        onOpenMorningBrief = { viewModel.toggleMorningBriefing(true) },
-                                        onOpenEveningSummary = { viewModel.toggleEveningSummary(true) },
-                                        onOpenFocus = { task ->
-                                            activeFocusTask = task
-                                            showFocusSheet = true
-                                        },
-                                        onOpenAccountSync = { showAccountDialog = true },
-                                        onOpenNotifications = { showNotificationsSheet = true },
-                                        onRequestCalendar = { showCalendarPermissionDialog = true },
-                                        onNavigateToTab = { route ->
-                                            when (route) {
-                                                "plan" -> currentDestination = AppDestination.PLAN
-                                                "money" -> currentDestination = AppDestination.MONEY
-                                                "habits" -> currentDestination = AppDestination.HABITS
-                                                "goals" -> currentDestination = AppDestination.GOALS
-                                                "notes" -> currentDestination = AppDestination.NOTES
-                                                "games" -> currentDestination = AppDestination.GAMES
-                                                "ai" -> currentDestination = AppDestination.AI
+                            AnimatedContent(
+                                targetState = currentDestination,
+                                transitionSpec = {
+                                    (fadeIn(animationSpec = androidx.compose.animation.core.tween(220)) +
+                                            scaleIn(initialScale = 0.98f, animationSpec = androidx.compose.animation.core.tween(220)))
+                                        .togetherWith(
+                                            fadeOut(animationSpec = androidx.compose.animation.core.tween(150))
+                                        )
+                                },
+                                label = "nav_screen_anim"
+                            ) { destination ->
+                                when (destination) {
+                                    AppDestination.HOME -> {
+                                        HomeScreen(
+                                            uiState = uiState,
+                                            onOpenQuickAdd = { tab -> quickAddSheetTab = tab },
+                                            onToggleTask = { task -> viewModel.toggleTask(task) },
+                                            onDeleteTask = { task -> viewModel.deleteTask(task) },
+                                            onRescheduleTask = { task ->
+                                                viewModel.rescheduleTask(task, System.currentTimeMillis() + 86400000, null)
+                                            },
+                                            onToggleHabit = { habitId -> viewModel.toggleHabit(habitId) },
+                                            onOpenAi = { currentDestination = AppDestination.AI },
+                                            onOpenSearch = { showSearchDialog = true },
+                                            onOpenMorningBrief = { viewModel.toggleMorningBriefing(true) },
+                                            onOpenEveningSummary = { viewModel.toggleEveningSummary(true) },
+                                            onOpenFocus = { task ->
+                                                activeFocusTask = task
+                                                showFocusSheet = true
+                                            },
+                                            onOpenAccountSync = { showAccountDialog = true },
+                                            onOpenNotifications = { showNotificationsSheet = true },
+                                            onRequestCalendar = { showCalendarPermissionDialog = true },
+                                            onNavigateToTab = { route ->
+                                                soundManager.playTap()
+                                                when (route) {
+                                                    "plan" -> currentDestination = AppDestination.PLAN
+                                                    "money" -> currentDestination = AppDestination.MONEY
+                                                    "habits" -> currentDestination = AppDestination.HABITS
+                                                    "goals" -> currentDestination = AppDestination.GOALS
+                                                    "notes" -> currentDestination = AppDestination.NOTES
+                                                    "games" -> currentDestination = AppDestination.GAMES
+                                                    "adventure" -> currentDestination = AppDestination.ADVENTURE
+                                                    "community" -> currentDestination = AppDestination.COMMUNITY
+                                                    "ai" -> currentDestination = AppDestination.AI
+                                                }
                                             }
-                                        }
-                                    )
-                                }
-                                AppDestination.PLAN -> {
-                                    PlanScreen(
-                                        uiState = uiState,
-                                        onOpenQuickAdd = { tab -> quickAddSheetTab = tab },
-                                        onToggleTask = { task -> viewModel.toggleTask(task) },
-                                        onDeleteTask = { task -> viewModel.deleteTask(task) },
-                                        onRescheduleTask = { task ->
-                                            viewModel.rescheduleTask(task, System.currentTimeMillis() + 86400000, null)
-                                        },
-                                        onOpenFocus = { task ->
-                                            activeFocusTask = task
-                                            showFocusSheet = true
-                                        },
-                                        onExportToCalendar = { task -> viewModel.exportTaskToCalendar(task) }
-                                    )
-                                }
-                                AppDestination.MONEY -> {
-                                    MoneyScreen(
-                                        uiState = uiState,
-                                        onOpenQuickAdd = { tab -> quickAddSheetTab = tab },
-                                        onSetBudget = { period, amount -> viewModel.setBudget(period, amount) },
-                                        onDeleteExpense = { exp -> viewModel.deleteExpense(exp) }
-                                    )
-                                }
-                                AppDestination.HABITS -> {
-                                    HabitsScreen(
-                                        uiState = uiState,
-                                        onOpenQuickAdd = { tab -> quickAddSheetTab = tab },
-                                        onToggleHabit = { habitId, dateEpoch -> viewModel.toggleHabit(habitId, dateEpoch) },
-                                        onDeleteHabit = { habit -> viewModel.deleteHabit(habit) }
-                                    )
-                                }
-                                AppDestination.GOALS -> {
-                                    GoalsScreen(
-                                        uiState = uiState,
-                                        onOpenQuickAdd = { tab -> quickAddSheetTab = tab },
-                                        onToggleMilestone = { m -> viewModel.toggleMilestone(m) },
-                                        onDeleteGoal = { goal -> viewModel.deleteGoal(goal) }
-                                    )
-                                }
-                                AppDestination.NOTES -> {
-                                    NotesScreen(
-                                        uiState = uiState,
-                                        onOpenQuickAdd = { tab -> quickAddSheetTab = tab },
-                                        onTogglePin = { note -> viewModel.toggleNotePin(note) },
-                                        onDeleteNote = { note -> viewModel.deleteNote(note) }
-                                    )
-                                }
-                                AppDestination.GAMES -> {
-                                    GamesHomeScreen(
-                                        isArabic = isArabic,
-                                        onBackToMyDay = { currentDestination = AppDestination.HOME }
-                                    )
-                                }
-                                AppDestination.AI -> {
-                                    AiScreen(
-                                        uiState = uiState,
-                                        onSendPrompt = { prompt -> viewModel.sendAiPrompt(prompt) },
-                                        onApplyPlan = { plan -> viewModel.applyAiPlan(plan) }
-                                    )
-                                }
-                                AppDestination.PROFILE -> {
-                                    ProfileScreen(
-                                        uiState = uiState,
-                                        onLanguageChange = { lang -> viewModel.setLanguage(lang) },
-                                        onThemeChange = { mode -> viewModel.setThemeMode(mode) },
-                                        onCurrencyChange = { curr -> viewModel.setCurrency(curr) },
-                                        onResetAllData = { viewModel.resetAllData() },
-                                        onOpenAccountSync = { showAccountDialog = true },
-                                        onUpdateNotificationPreferences = { q, t, b, h ->
-                                            viewModel.updateNotificationPreferences(q, t, b, h)
-                                        }
-                                    )
+                                        )
+                                    }
+                                    AppDestination.PLAN -> {
+                                        PlanScreen(
+                                            uiState = uiState,
+                                            onOpenQuickAdd = { tab -> quickAddSheetTab = tab },
+                                            onToggleTask = { task -> viewModel.toggleTask(task) },
+                                            onDeleteTask = { task -> viewModel.deleteTask(task) },
+                                            onRescheduleTask = { task ->
+                                                viewModel.rescheduleTask(task, System.currentTimeMillis() + 86400000, null)
+                                            },
+                                            onOpenFocus = { task ->
+                                                activeFocusTask = task
+                                                showFocusSheet = true
+                                            },
+                                            onExportToCalendar = { task -> viewModel.exportTaskToCalendar(task) }
+                                        )
+                                    }
+                                    AppDestination.MONEY -> {
+                                        MoneyScreen(
+                                            uiState = uiState,
+                                            onOpenQuickAdd = { tab -> quickAddSheetTab = tab },
+                                            onSetBudget = { period, amount -> viewModel.setBudget(period, amount) },
+                                            onDeleteExpense = { exp -> viewModel.deleteExpense(exp) }
+                                        )
+                                    }
+                                    AppDestination.HABITS -> {
+                                        HabitsScreen(
+                                            uiState = uiState,
+                                            onOpenQuickAdd = { tab -> quickAddSheetTab = tab },
+                                            onToggleHabit = { habitId, dateEpoch -> viewModel.toggleHabit(habitId, dateEpoch) },
+                                            onDeleteHabit = { habit -> viewModel.deleteHabit(habit) }
+                                        )
+                                    }
+                                    AppDestination.GOALS -> {
+                                        GoalsScreen(
+                                            uiState = uiState,
+                                            onOpenQuickAdd = { tab -> quickAddSheetTab = tab },
+                                            onToggleMilestone = { m -> viewModel.toggleMilestone(m) },
+                                            onDeleteGoal = { goal -> viewModel.deleteGoal(goal) }
+                                        )
+                                    }
+                                    AppDestination.NOTES -> {
+                                        NotesScreen(
+                                            uiState = uiState,
+                                            onOpenQuickAdd = { tab -> quickAddSheetTab = tab },
+                                            onTogglePin = { note -> viewModel.toggleNotePin(note) },
+                                            onDeleteNote = { note -> viewModel.deleteNote(note) }
+                                        )
+                                    }
+                                    AppDestination.GAMES -> {
+                                        GamesHomeScreen(
+                                            isArabic = isArabic,
+                                            onBackToMyDay = { currentDestination = AppDestination.HOME }
+                                        )
+                                    }
+                                    AppDestination.ADVENTURE -> {
+                                        AdventureScreen(
+                                            uiState = uiState,
+                                            isArabic = isArabic,
+                                            onBackToHome = { currentDestination = AppDestination.HOME },
+                                            onClaimQuest = { quest -> viewModel.claimRpgQuest(quest) },
+                                            onPurchaseEquipment = { item -> viewModel.purchaseRpgStoreItem(item) },
+                                            onEquipItem = { item -> viewModel.equipRpgItem(item) },
+                                            onUnlockSkill = { skill -> viewModel.unlockRpgSkill(skill) },
+                                            onDamageBoss = { bossId, dmg -> viewModel.attackBossWithGoal(bossId, dmg) },
+                                            onCreateBoss = { nEn, nAr, hp, xp, gId -> viewModel.createBossChallenge(nEn, nAr, hp, xp, gId) }
+                                        )
+                                    }
+                                    AppDestination.COMMUNITY -> {
+                                        CommunityScreen(
+                                            uiState = uiState,
+                                            onSetupProfile = { username, displayName, avatarId, bio ->
+                                                viewModel.setupCommunityProfile(username, displayName, avatarId, bio)
+                                            },
+                                            onUpdateProfile = { displayName, avatarId, bio ->
+                                                viewModel.updateCommunityProfile(displayName, avatarId, bio)
+                                            },
+                                            onChangeUsername = { newUsername ->
+                                                viewModel.changeCommunityUsername(newUsername)
+                                            },
+                                            onSendFriendRequest = { friendUsername ->
+                                                viewModel.sendFriendRequest(friendUsername)
+                                            },
+                                            onAcceptFriendRequest = { friend ->
+                                                viewModel.acceptFriendRequest(friend)
+                                            },
+                                            onRejectFriendRequest = { friend ->
+                                                viewModel.rejectFriendRequest(friend)
+                                            },
+                                            onRemoveFriend = { friend ->
+                                                viewModel.removeCommunityFriend(friend)
+                                            },
+                                            onStartBattle = { opponent, battleType ->
+                                                viewModel.startBattleWithFriend(opponent, battleType)
+                                            },
+                                            onDismissBattleSimulation = {
+                                                viewModel.dismissBattleSimulation()
+                                            },
+                                            onTestConnection = {
+                                                viewModel.testCommunityConnection()
+                                            },
+                                            onRegenerateConnectionId = {
+                                                viewModel.regenerateConnectionId()
+                                            },
+                                            onBackToHome = {
+                                                currentDestination = AppDestination.HOME
+                                            }
+                                        )
+                                    }
+                                    AppDestination.AI -> {
+                                        AiScreen(
+                                            uiState = uiState,
+                                            onSendPrompt = { prompt -> viewModel.sendAiPrompt(prompt) },
+                                            onApplyPlan = { plan ->
+                                                soundManager.playPlanApplied()
+                                                viewModel.applyAiPlan(plan)
+                                            }
+                                        )
+                                    }
+                                    AppDestination.PROFILE -> {
+                                        ProfileScreen(
+                                            uiState = uiState,
+                                            onLanguageChange = { lang -> viewModel.setLanguage(lang) },
+                                            onThemeChange = { mode -> viewModel.setThemeMode(mode) },
+                                            onCurrencyChange = { curr -> viewModel.setCurrency(curr) },
+                                            onResetAllData = { viewModel.resetAllData() },
+                                            onOpenAccountSync = { showAccountDialog = true },
+                                            onUpdateNotificationPreferences = { q, t, b, h ->
+                                                viewModel.updateNotificationPreferences(q, t, b, h)
+                                            }
+                                        )
+                                    }
                                 }
                             }
 
@@ -335,7 +420,7 @@ fun YawmekApp(
                         )
                     }
 
-                    // Evening Summary Dialog
+                    // Evening Summary Dialog & Daily Reset
                     if (uiState.showEveningSummary) {
                         val completedToday = uiState.tasks.filter { it.isCompleted }
                         EveningSummaryDialog(
@@ -345,11 +430,17 @@ fun YawmekApp(
                             unfinishedTasks = uiState.pendingTasks,
                             todaySpent = uiState.todaySpending,
                             currency = uiState.userSettings.currency,
+                            onMoveSelectedToTomorrow = { selectedTasks ->
+                                soundManager.playPlanApplied()
+                                viewModel.moveUnfinishedTasksToTomorrow(selectedTasks)
+                            },
+                            onMarkSelectedAsSkipped = { selectedTasks ->
+                                soundManager.playTaskCompleted()
+                                viewModel.markTasksAsSkipped(selectedTasks)
+                            },
                             onMoveUnfinishedToTomorrow = {
-                                val tomorrow = System.currentTimeMillis() + 86400000
-                                uiState.pendingTasks.forEach { task ->
-                                    viewModel.rescheduleTask(task, tomorrow, null)
-                                }
+                                soundManager.playPlanApplied()
+                                viewModel.moveUnfinishedTasksToTomorrow(uiState.pendingTasks)
                             },
                             onDismiss = { viewModel.toggleEveningSummary(false) }
                         )

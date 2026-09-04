@@ -24,6 +24,18 @@ import com.example.domain.notifications.InAppNotification
 import com.example.domain.notifications.SmartNotificationManager
 import com.example.domain.sync.CloudSyncEngine
 import com.example.domain.sync.SyncState
+import com.example.domain.rpg.RpgProgressionManager
+import com.example.domain.rpg.RpgStateMerger
+import com.example.domain.rpg.RpgCombinedState
+import com.example.domain.rpg.RpgProgressionCalculator
+import com.example.domain.audio.SoundHapticManager
+import com.example.domain.money.MoneyCalculator
+import com.example.domain.money.FinancialOverview
+import com.example.domain.calendar.SmartTimeBlockingEngine
+import com.example.domain.focus.FocusSessionManager
+import com.example.domain.focus.FocusAnalytics
+import com.example.domain.community.CommunityBattleEngine
+import com.example.domain.community.BattleSimulationResult
 import com.example.ui.widget.YawmekWidgetUpdater
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -76,7 +88,70 @@ data class YawmekUiState(
     val isCalendarPermissionGranted: Boolean = false,
     val focusSessions: List<FocusSessionEntity> = emptyList(),
     val todayFocusMinutes: Int = 0,
-    val inAppNotifications: List<InAppNotification> = emptyList()
+    val inAppNotifications: List<InAppNotification> = emptyList(),
+    val rpgCharacter: CharacterRpgEntity = CharacterRpgEntity(),
+    val rpgEquipment: List<EquipmentItemEntity> = emptyList(),
+    val rpgCompanions: List<CompanionEntity> = emptyList(),
+    val rpgSkills: List<SkillNodeEntity> = emptyList(),
+    val rpgQuests: List<RpgQuestEntity> = emptyList(),
+    val rpgBosses: List<BossChallengeEntity> = emptyList(),
+    // Advanced Money System additions
+    val accounts: List<WalletAccountEntity> = emptyList(),
+    val transactions: List<FinancialTransactionEntity> = emptyList(),
+    val financialCategories: List<FinancialCategoryEntity> = emptyList(),
+    val recurringTransactions: List<RecurringTransactionEntity> = emptyList(),
+    val financialGoals: List<FinancialGoalEntity> = emptyList(),
+    val financialOverview: FinancialOverview? = null,
+    // Professional Smart Calendar additions
+    val roomCalendarEvents: List<CalendarEventEntity> = emptyList(),
+    val calendarViewMode: CalendarViewMode = CalendarViewMode.DAY,
+    val selectedCalendarDate: LocalDate = LocalDate.now(),
+    val smartTimeSlotProposals: List<SmartTimeSlotProposal> = emptyList(),
+    val isShowingSmartSchedulePreview: Boolean = false,
+    val conflictingEventIds: Set<Long> = emptySet(),
+    // Advanced Focus Mode additions
+    val focusAnalytics: FocusAnalytics = FocusAnalytics(0, 0, 0, 0, 70, 0f, 0f, 0),
+    val focusPreferences: FocusPreferencesEntity = FocusPreferencesEntity(),
+    val isFocusShieldActive: Boolean = false,
+    // YAWMEK Community additions
+    val communityProfile: CommunityProfileEntity? = null,
+    val communityFriends: List<CommunityFriendEntity> = emptyList(),
+    val communityBattles: List<CommunityBattleEntity> = emptyList(),
+    val isCommunityConnected: Boolean = true,
+    val activeBattleSimulation: BattleSimulationResult? = null,
+    val leaderboardUsers: List<LeaderboardUserItem> = emptyList()
+)
+
+private data class CommunityData(
+    val profile: CommunityProfileEntity?,
+    val friends: List<CommunityFriendEntity>,
+    val battles: List<CommunityBattleEntity>,
+    val isConnected: Boolean,
+    val activeBattle: BattleSimulationResult?
+)
+
+private data class MoneyData(
+    val accounts: List<WalletAccountEntity>,
+    val transactions: List<FinancialTransactionEntity>,
+    val categories: List<FinancialCategoryEntity>,
+    val recurring: List<RecurringTransactionEntity>,
+    val goals: List<FinancialGoalEntity>
+)
+
+private data class CalendarData(
+    val roomEvents: List<CalendarEventEntity>,
+    val deviceEvents: List<CalendarEventItem>,
+    val isGranted: Boolean,
+    val viewMode: CalendarViewMode,
+    val selectedDate: LocalDate,
+    val proposals: List<SmartTimeSlotProposal>,
+    val showPreview: Boolean
+)
+
+private data class FocusData(
+    val sessions: List<FocusSessionEntity>,
+    val prefs: FocusPreferencesEntity,
+    val isShieldActive: Boolean
 )
 
 class YawmekViewModel(application: Application) : AndroidViewModel(application) {
@@ -85,6 +160,7 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
     val accountManager: AccountManager
     val cloudSyncEngine: CloudSyncEngine
     val focusAudioHelper: FocusAudioHelper
+    val rpgManager: RpgProgressionManager
 
     private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
     private val _isAiThinking = MutableStateFlow(false)
@@ -97,15 +173,27 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
     private val _isCalendarPermissionGranted = MutableStateFlow(false)
     private val _inAppNotifications = MutableStateFlow<List<InAppNotification>>(emptyList())
 
+    private val _calendarViewMode = MutableStateFlow(CalendarViewMode.DAY)
+    private val _selectedCalendarDate = MutableStateFlow(LocalDate.now())
+    private val _smartTimeSlotProposals = MutableStateFlow<List<SmartTimeSlotProposal>>(emptyList())
+    private val _isShowingSmartSchedulePreview = MutableStateFlow(false)
+    private val _isFocusShieldActive = MutableStateFlow(false)
+    private val _isCommunityConnected = MutableStateFlow(true)
+    private val _activeBattleSimulation = MutableStateFlow<BattleSimulationResult?>(null)
+
     init {
         val db = AppDatabase.getDatabase(application)
         repository = YawmekRepository(db)
         accountManager = AccountManager(db.userAccountDao())
         cloudSyncEngine = CloudSyncEngine(application, db)
         focusAudioHelper = FocusAudioHelper(application)
+        rpgManager = RpgProgressionManager(repository)
         SmartNotificationManager.initializeChannels(application)
         _inAppNotifications.value = SmartNotificationManager.getHistory()
         initializeInitialSettingsIfEmpty()
+        viewModelScope.launch {
+            rpgManager.initializeCatalogIfEmpty()
+        }
         YawmekWidgetUpdater.requestUpdate(application)
     }
 
@@ -119,7 +207,170 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
             if (prefs == null) {
                 repository.updateNotificationPreferences(NotificationPreferencesEntity(id = 1))
             }
+            // Seed Community Profile and initial friends if empty
+            val communityProf = repository.getCommunityProfile()
+            if (communityProf == null) {
+                val defaultUsername = settings?.userName?.takeIf { it.isNotBlank() } ?: "Adventurer"
+                val defaultConnectionId = "YAWMEK-NET-" + java.util.UUID.randomUUID().toString().take(8).uppercase()
+                repository.saveCommunityProfile(
+                    CommunityProfileEntity(
+                        id = 1,
+                        username = defaultUsername.lowercase().replace(" ", "_"),
+                        displayName = defaultUsername,
+                        avatarId = "warrior",
+                        bio = "Building my legend in YAWMEK!",
+                        rankTitleEn = "Novice Adventurer",
+                        rankTitleAr = "مغامر مبتدئ",
+                        rating = 1000,
+                        connectionId = defaultConnectionId,
+                        isOnline = true,
+                        isInitialSetupDone = false
+                    )
+                )
+            }
+            val existingFriend = repository.getFriendByUsername("ziyad_paladin")
+            if (existingFriend == null) {
+                val now = System.currentTimeMillis()
+                repository.insertFriend(
+                    CommunityFriendEntity(
+                        friendUsername = "ziyad_paladin",
+                        friendDisplayName = "Ziyad The Paladin",
+                        avatarId = "paladin",
+                        level = 8,
+                        xp = 3400L,
+                        rankTitle = "Paladin",
+                        characterClass = "WARRIOR",
+                        isOnline = true,
+                        status = FriendshipStatus.FRIEND,
+                        rating = 1180,
+                        tasksCompleted = 42,
+                        focusMinutes = 310,
+                        lastActiveMillis = now
+                    )
+                )
+                repository.insertFriend(
+                    CommunityFriendEntity(
+                        friendUsername = "sarah_chrono",
+                        friendDisplayName = "Sarah Chrono",
+                        avatarId = "mage",
+                        level = 11,
+                        xp = 5800L,
+                        rankTitle = "Chronomancer",
+                        characterClass = "MAGE",
+                        isOnline = true,
+                        status = FriendshipStatus.FRIEND,
+                        rating = 1250,
+                        tasksCompleted = 67,
+                        focusMinutes = 480,
+                        lastActiveMillis = now
+                    )
+                )
+                repository.insertFriend(
+                    CommunityFriendEntity(
+                        friendUsername = "kareem_monk",
+                        friendDisplayName = "Kareem Focus Monk",
+                        avatarId = "monk",
+                        level = 6,
+                        xp = 2100L,
+                        rankTitle = "Focus Disciple",
+                        characterClass = "ROGUE",
+                        isOnline = false,
+                        status = FriendshipStatus.FRIEND,
+                        rating = 1060,
+                        tasksCompleted = 29,
+                        focusMinutes = 240,
+                        lastActiveMillis = now - 7200000L
+                    )
+                )
+                repository.insertFriend(
+                    CommunityFriendEntity(
+                        friendUsername = "nour_alchemist",
+                        friendDisplayName = "Nour Alchemist",
+                        avatarId = "alchemist",
+                        level = 5,
+                        xp = 1750L,
+                        rankTitle = "Alchemist",
+                        characterClass = "MAGE",
+                        isOnline = true,
+                        status = FriendshipStatus.PENDING_RECEIVED,
+                        rating = 1040,
+                        tasksCompleted = 18,
+                        focusMinutes = 190,
+                        lastActiveMillis = now
+                    )
+                )
+                repository.insertFriend(
+                    CommunityFriendEntity(
+                        friendUsername = "omar_ranger",
+                        friendDisplayName = "Omar The Ranger",
+                        avatarId = "archer",
+                        level = 9,
+                        xp = 4200L,
+                        rankTitle = "Sharpshooter",
+                        characterClass = "ROGUE",
+                        isOnline = false,
+                        status = FriendshipStatus.FRIEND,
+                        rating = 1140,
+                        tasksCompleted = 51,
+                        focusMinutes = 350,
+                        lastActiveMillis = now - 86400000L
+                    )
+                )
+            }
         }
+    }
+
+    private val moneyFlow = combine(
+        repository.allActiveAccounts,
+        repository.allTransactions,
+        repository.allFinancialCategories,
+        repository.activeRecurringTransactions,
+        repository.allFinancialGoals
+    ) { accounts, txs, cats, recurring, goals ->
+        MoneyData(accounts, txs, cats, recurring, goals)
+    }
+
+    private val calendarFlow = combine(
+        repository.allCalendarEvents,
+        _calendarEvents,
+        _isCalendarPermissionGranted,
+        _calendarViewMode,
+        _selectedCalendarDate,
+        _smartTimeSlotProposals,
+        _isShowingSmartSchedulePreview
+    ) { args: Array<Any?> ->
+        @Suppress("UNCHECKED_CAST")
+        CalendarData(
+            roomEvents = args[0] as List<CalendarEventEntity>,
+            deviceEvents = args[1] as List<CalendarEventItem>,
+            isGranted = args[2] as Boolean,
+            viewMode = args[3] as CalendarViewMode,
+            selectedDate = args[4] as LocalDate,
+            proposals = args[5] as List<SmartTimeSlotProposal>,
+            showPreview = args[6] as Boolean
+        )
+    }
+
+    private val focusFlow = combine(
+        repository.allFocusSessions,
+        repository.focusPreferences,
+        _isFocusShieldActive
+    ) { sessions, prefs, isShield ->
+        FocusData(
+            sessions = sessions,
+            prefs = prefs ?: FocusPreferencesEntity(),
+            isShieldActive = isShield
+        )
+    }
+
+    private val communityFlow = combine(
+        repository.communityProfile,
+        repository.allCommunityFriends,
+        repository.allCommunityBattles,
+        _isCommunityConnected,
+        _activeBattleSimulation
+    ) { profile, friends, battles, isConnected, activeBattle ->
+        CommunityData(profile, friends, battles, isConnected, activeBattle)
     }
 
     // Combine flows into single reactive UI State
@@ -142,10 +393,19 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
         repository.activeAccount,
         cloudSyncEngine.syncState,
         repository.notificationPreferences,
-        repository.allFocusSessions,
-        _calendarEvents,
-        _isCalendarPermissionGranted,
-        _inAppNotifications
+        _inAppNotifications,
+        RpgStateMerger.merge(
+            repository.rpgCharacter,
+            repository.rpgEquipment,
+            repository.rpgCompanions,
+            repository.rpgSkills,
+            repository.rpgQuests,
+            repository.rpgBosses
+        ),
+        moneyFlow,
+        calendarFlow,
+        focusFlow,
+        communityFlow
     ) { args: Array<Any?> ->
         @Suppress("UNCHECKED_CAST")
         val tasks = args[0] as List<TaskEntity>
@@ -175,12 +435,12 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
         val syncState = (args[16] as? SyncState) ?: SyncState.Idle
         val notifPrefs = (args[17] as? NotificationPreferencesEntity) ?: NotificationPreferencesEntity()
         @Suppress("UNCHECKED_CAST")
-        val focusSessions = (args[18] as? List<FocusSessionEntity>) ?: emptyList()
-        @Suppress("UNCHECKED_CAST")
-        val calendarEvents = (args[19] as? List<CalendarEventItem>) ?: emptyList()
-        val isCalGranted = (args[20] as? Boolean) ?: false
-        @Suppress("UNCHECKED_CAST")
-        val inAppNotifs = (args[21] as? List<InAppNotification>) ?: emptyList()
+        val inAppNotifs = args[18] as List<InAppNotification>
+        val rpgCombined = (args[19] as? RpgCombinedState) ?: RpgCombinedState()
+        val moneyData = (args[20] as? MoneyData) ?: MoneyData(emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
+        val calData = (args[21] as? CalendarData) ?: CalendarData(emptyList(), emptyList(), false, CalendarViewMode.DAY, LocalDate.now(), emptyList(), false)
+        val focData = (args[22] as? FocusData) ?: FocusData(emptyList(), FocusPreferencesEntity(), false)
+        val comData = (args[23] as? CommunityData) ?: CommunityData(null, emptyList(), emptyList(), true, null)
 
         val pending = tasks.filter { !it.isCompleted }
 
@@ -189,7 +449,7 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
             tasks = tasks,
             habits = habits,
             habitLogs = habitLogs,
-            calendarEvents = calendarEvents,
+            calendarEvents = calData.deviceEvents,
             workStartHour = settings.workStartHour,
             workEndHour = settings.workEndHour
         )
@@ -202,9 +462,24 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
         val monthSpent = expenses.filter { it.dateMillis >= monthStartMillis }.sumOf { it.amount }
         val monthlyBudgetAmount = budgets.firstOrNull { it.period == BudgetPeriod.MONTHLY }?.amount ?: 0.0
 
-        val todayFocusMinutes = focusSessions
-            .filter { it.startedAtMillis >= todayStartMillis }
-            .sumOf { it.actualSeconds / 60 }
+        // Financial Overview calculation
+        val monthlyBudgetMinor = MoneyUtils.toMinor(monthlyBudgetAmount)
+        val finOverview = MoneyCalculator.buildFinancialOverview(
+            accounts = moneyData.accounts,
+            transactions = moneyData.transactions,
+            monthlyBudgetMinor = monthlyBudgetMinor,
+            targetDate = calData.selectedDate
+        )
+
+        // Calendar Conflict detection
+        val conflictingIds = SmartTimeBlockingEngine.findConflictingEventIds(calData.roomEvents)
+
+        // Focus analytics
+        val focAnalytics = FocusSessionManager.computeAnalytics(
+            sessions = focData.sessions,
+            dailyTargetMinutes = focData.prefs.dailyTargetMinutes,
+            weeklyTargetMinutes = focData.prefs.weeklyTargetMinutes
+        )
 
         // Search filtering
         val searchResults = if (query.isNotBlank()) {
@@ -219,6 +494,36 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
         } else {
             GlobalSearchResults()
         }
+
+        // Leaderboard Calculation
+        val myProf = comData.profile
+        val myRankItem = LeaderboardUserItem(
+            rank = 1,
+            username = myProf?.username?.ifBlank { "You" } ?: "You",
+            displayName = myProf?.displayName?.ifBlank { "You" } ?: "You",
+            avatarId = myProf?.avatarId ?: "warrior",
+            level = rpgCombined.character.level,
+            rating = myProf?.rating ?: 1000,
+            focusMinutes = focAnalytics.todayMinutes,
+            battleWins = myProf?.battleWins ?: 0,
+            isCurrentUser = true
+        )
+        val friendRankItems = comData.friends.map { f ->
+            LeaderboardUserItem(
+                rank = 0,
+                username = f.friendUsername,
+                displayName = f.friendDisplayName,
+                avatarId = f.avatarId,
+                level = f.level,
+                rating = f.rating,
+                focusMinutes = f.focusMinutes,
+                battleWins = (f.rating / 50).coerceAtLeast(0),
+                isCurrentUser = false
+            )
+        }
+        val computedLeaderboard = (listOf(myRankItem) + friendRankItems)
+            .sortedByDescending { it.rating }
+            .mapIndexed { idx, item -> item.copy(rank = idx + 1) }
 
         YawmekUiState(
             isLoading = false,
@@ -246,11 +551,42 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
             activeAccount = activeAccount,
             syncState = syncState,
             notificationPreferences = notifPrefs,
-            calendarEvents = calendarEvents,
-            isCalendarPermissionGranted = isCalGranted,
-            focusSessions = focusSessions,
-            todayFocusMinutes = todayFocusMinutes,
-            inAppNotifications = inAppNotifs
+            calendarEvents = calData.deviceEvents,
+            isCalendarPermissionGranted = calData.isGranted,
+            focusSessions = focData.sessions,
+            todayFocusMinutes = focAnalytics.todayMinutes,
+            inAppNotifications = inAppNotifs,
+            rpgCharacter = rpgCombined.character,
+            rpgEquipment = rpgCombined.equipment,
+            rpgCompanions = rpgCombined.companions,
+            rpgSkills = rpgCombined.skills,
+            rpgQuests = rpgCombined.quests,
+            rpgBosses = rpgCombined.bosses,
+            // Advanced Money System additions
+            accounts = moneyData.accounts,
+            transactions = moneyData.transactions,
+            financialCategories = moneyData.categories,
+            recurringTransactions = moneyData.recurring,
+            financialGoals = moneyData.goals,
+            financialOverview = finOverview,
+            // Professional Smart Calendar additions
+            roomCalendarEvents = calData.roomEvents,
+            calendarViewMode = calData.viewMode,
+            selectedCalendarDate = calData.selectedDate,
+            smartTimeSlotProposals = calData.proposals,
+            isShowingSmartSchedulePreview = calData.showPreview,
+            conflictingEventIds = conflictingIds,
+            // Advanced Focus Mode additions
+            focusAnalytics = focAnalytics,
+            focusPreferences = focData.prefs,
+            isFocusShieldActive = focData.isShieldActive,
+            // YAWMEK Community additions
+            communityProfile = myProf,
+            communityFriends = comData.friends,
+            communityBattles = comData.battles,
+            isCommunityConnected = comData.isConnected,
+            activeBattleSimulation = comData.activeBattle,
+            leaderboardUsers = computedLeaderboard
         )
     }.stateIn(
         scope = viewModelScope,
@@ -353,10 +689,25 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
 
     fun toggleTask(task: TaskEntity) {
         viewModelScope.launch {
+            val wasCompleted = task.isCompleted
             repository.toggleTaskCompletion(task)
             YawmekWidgetUpdater.requestUpdate(getApplication())
-            if (!task.isCompleted) {
-                triggerCelebration("Great job! Completed: ${task.title}")
+            if (!wasCompleted) {
+                val soundManager = SoundHapticManager.getInstance(getApplication())
+                soundManager.playTaskCompleted()
+                val isHigh = task.priority == Priority.HIGH
+                val completedCount = uiState.value.tasks.count { it.isCompleted }
+                val xp = RpgProgressionCalculator.evaluateTaskXp(isHigh, completedCount)
+                val actionType = if (isHigh) "TASK_HIGH" else "TASK_NORMAL"
+                val statKey = if (isHigh) "COURAGE" else "DISCIPLINE"
+                val result = rpgManager.awardProductivityXp(actionType, xp, statKey)
+                if (result.leveledUp) {
+                    soundManager.playRpgLevelUp()
+                    triggerCelebration(result.summaryMessageEn + " / " + result.summaryMessageAr)
+                } else {
+                    soundManager.playRpgXpGain()
+                    triggerCelebration("Great job! Completed: ${task.title} (+${xp} XP)")
+                }
             }
         }
     }
@@ -441,7 +792,21 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
 
     fun toggleHabit(habitId: Long, dateEpochDay: Long = LocalDate.now().toEpochDay()) {
         viewModelScope.launch {
+            val wasLogged = repository.getHabitLogsSince(dateEpochDay).firstOrNull()?.any { it.habitId == habitId } == true
             repository.toggleHabitForDate(habitId, dateEpochDay)
+            if (!wasLogged) {
+                val soundManager = SoundHapticManager.getInstance(getApplication())
+                val countToday = uiState.value.habitLogs.count { it.dateEpochDay == dateEpochDay }
+                val xp = RpgProgressionCalculator.evaluateHabitXp(countToday)
+                val result = rpgManager.awardProductivityXp("HABIT", xp, "CONSISTENCY")
+                if (result.leveledUp) {
+                    soundManager.playRpgLevelUp()
+                    triggerCelebration(result.summaryMessageEn + " / " + result.summaryMessageAr)
+                } else {
+                    soundManager.playRpgXpGain()
+                    triggerCelebration("Habit completed! (+${xp} XP)")
+                }
+            }
         }
     }
 
@@ -485,7 +850,20 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
 
     fun toggleMilestone(milestone: MilestoneEntity) {
         viewModelScope.launch {
+            val wasDone = milestone.isCompleted
             repository.toggleMilestone(milestone)
+            if (!wasDone) {
+                val soundManager = SoundHapticManager.getInstance(getApplication())
+                soundManager.playGoalMilestone()
+                val result = rpgManager.awardProductivityXp("MILESTONE", RpgProgressionCalculator.XP_GOAL_MILESTONE, "PLANNING")
+                if (result.leveledUp) {
+                    soundManager.playRpgLevelUp()
+                    triggerCelebration(result.summaryMessageEn + " / " + result.summaryMessageAr)
+                } else {
+                    soundManager.playRpgXpGain()
+                    triggerCelebration("Milestone achieved! (+${RpgProgressionCalculator.XP_GOAL_MILESTONE} XP)")
+                }
+            }
         }
     }
 
@@ -537,6 +915,20 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
 
         viewModelScope.launch {
             val state = uiState.value
+            val fin = state.financialOverview
+            val finSummary = if (fin != null) {
+                "Net Worth: ${MoneyUtils.formatMinor(fin.totalNetWorthMinor)}, " +
+                "Month Income: ${MoneyUtils.formatMinor(fin.totalIncomeMinor)}, " +
+                "Month Expense: ${MoneyUtils.formatMinor(fin.totalExpenseMinor)}, " +
+                "Savings Rate: ${fin.savingsRatePercent.toInt()}%, " +
+                "Budget Health: ${fin.budgetHealthScore}/100"
+            } else ""
+
+            val calSummary = "${state.roomCalendarEvents.size} events on calendar today. " +
+                if (state.conflictingEventIds.isNotEmpty()) "${state.conflictingEventIds.size} overlaps detected." else "No conflicts."
+
+            val focSummary = "${state.focusAnalytics.todayMinutes} mins focused today. Streak: ${state.focusAnalytics.streakDays} days."
+
             val contextData = UserContextData(
                 userName = state.userSettings.userName,
                 language = state.userSettings.language,
@@ -544,7 +936,10 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
                 tasks = state.tasks,
                 pendingTasksSummary = state.pendingTasks.take(5).joinToString(", ") { "${it.title} (${it.priority})" },
                 todaySpending = state.todaySpending,
-                habitsSummary = state.habits.take(5).joinToString(", ") { it.title }
+                habitsSummary = state.habits.take(5).joinToString(", ") { it.title },
+                financialSummary = finSummary,
+                calendarSummary = calSummary,
+                focusSummary = focSummary
             )
 
             val aiResult: AiResponseResult = YawmekAiEngine.generateAiAdvice(prompt, contextData)
@@ -612,8 +1007,96 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
                     repository.toggleTaskCompletion(task)
                 }
             }
-            triggerCelebration("Focus session saved! (+${session.durationMinutes}m)")
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            soundManager.playFocusSessionCompleted()
+            val todayFocused = uiState.value.todayFocusMinutes
+            val xp = RpgProgressionCalculator.evaluateFocusXp(session.durationMinutes, todayFocused)
+            val result = rpgManager.awardProductivityXp("FOCUS", xp, "FOCUS")
+            if (result.leveledUp) {
+                soundManager.playRpgLevelUp()
+                triggerCelebration(result.summaryMessageEn + " / " + result.summaryMessageAr)
+            } else {
+                soundManager.playRpgXpGain()
+                triggerCelebration("Focus session saved! (+${session.durationMinutes}m, +${xp} XP)")
+            }
             YawmekWidgetUpdater.requestUpdate(getApplication())
+        }
+    }
+
+    // RPG Progression User Actions
+    fun claimRpgQuest(quest: RpgQuestEntity) {
+        viewModelScope.launch {
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            val success = rpgManager.claimQuestReward(quest)
+            if (success) {
+                soundManager.playRpgLevelUp()
+                triggerCelebration("Quest Reward Claimed! (+${quest.rewardXp} XP)")
+            }
+        }
+    }
+
+    fun purchaseRpgStoreItem(item: EquipmentItemEntity) {
+        viewModelScope.launch {
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            val success = rpgManager.purchaseStoreItem(item)
+            if (success) {
+                soundManager.playRpgEquipmentEquipped()
+                triggerCelebration("Purchased: ${item.nameEn}!")
+            } else {
+                triggerCelebration("Not enough XP or Level requirement not met!")
+            }
+        }
+    }
+
+    fun equipRpgItem(item: EquipmentItemEntity) {
+        viewModelScope.launch {
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            rpgManager.equipItem(item)
+            soundManager.playRpgEquipmentEquipped()
+            triggerCelebration("Equipped: ${item.nameEn}!")
+        }
+    }
+
+    fun unlockRpgSkill(skill: SkillNodeEntity) {
+        viewModelScope.launch {
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            val success = rpgManager.unlockSkill(skill)
+            if (success) {
+                soundManager.playRpgLevelUp()
+                triggerCelebration("Skill Unlocked: ${skill.nameEn}!")
+            } else {
+                triggerCelebration("Need more skill points or level requirement!")
+            }
+        }
+    }
+
+    fun attackBossWithGoal(bossId: Long, damage: Int) {
+        viewModelScope.launch {
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            soundManager.playRpgBossHit()
+            rpgManager.damageBossWithGoal(bossId, damage)
+            triggerCelebration("Strike landed on Boss! (-${damage} HP) ⚔️")
+        }
+    }
+
+    fun createBossChallenge(nameEn: String, nameAr: String, hp: Int, rewardXp: Long, relatedGoalId: Long? = null) {
+        viewModelScope.launch {
+            repository.insertBoss(
+                BossChallengeEntity(
+                    bossNameEn = nameEn,
+                    bossNameAr = nameAr,
+                    titleEn = "Goal Overlord",
+                    titleAr = "حارس التحدي الأكبر",
+                    iconEmoji = "👾",
+                    maxHp = hp,
+                    currentHp = hp,
+                    rewardXp = rewardXp,
+                    rewardTitleEn = "Slayer of $nameEn",
+                    rewardTitleAr = "قاهر $nameAr",
+                    relatedGoalId = relatedGoalId
+                )
+            )
+            triggerCelebration("Boss Challenge Registered! 🛡️")
         }
     }
 
@@ -765,12 +1248,699 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
         _inAppNotifications.value = emptyList()
     }
 
+    // Daily Reset Manager logic
+    private val dailyResetManager by lazy { com.example.domain.reset.DailyResetManager(repository) }
+
+    fun moveUnfinishedTasksToTomorrow(tasks: List<TaskEntity>) {
+        viewModelScope.launch {
+            dailyResetManager.moveTasksToTomorrow(tasks)
+            YawmekWidgetUpdater.requestUpdate(getApplication())
+            val isArabic = uiState.value.userSettings.language == AppLanguage.ARABIC
+            val msg = if (isArabic) "تم نقل ${tasks.size} مهام إلى الغد بنجاح 🌅" else "Moved ${tasks.size} tasks to tomorrow 🌅"
+            triggerCelebration(msg)
+        }
+    }
+
+    fun markTasksAsSkipped(tasks: List<TaskEntity>) {
+        viewModelScope.launch {
+            dailyResetManager.markTasksAsSkipped(tasks)
+            YawmekWidgetUpdater.requestUpdate(getApplication())
+            val isArabic = uiState.value.userSettings.language == AppLanguage.ARABIC
+            val msg = if (isArabic) "تم تخطي ${tasks.size} مهام 🧹" else "Marked ${tasks.size} tasks as skipped 🧹"
+            triggerCelebration(msg)
+        }
+    }
+
     fun resetAllData() {
         viewModelScope.launch {
             repository.clearAllData()
             _chatMessages.value = emptyList()
             YawmekWidgetUpdater.requestUpdate(getApplication())
             triggerCelebration("Workspace reset to clean slate.")
+        }
+    }
+
+    // ==========================================
+    // ADVANCED MONEY / FINANCE SYSTEM ACTIONS
+    // ==========================================
+    fun createAccount(
+        name: String,
+        type: AccountType = AccountType.CASH,
+        initialBalanceMinor: Long = 0L,
+        currency: String = "EGP",
+        colorHex: String = "#10B981",
+        iconName: String = "wallet"
+    ) {
+        viewModelScope.launch {
+            repository.insertAccount(
+                WalletAccountEntity(
+                    name = name.trim(),
+                    type = type,
+                    balanceMinor = initialBalanceMinor,
+                    currency = currency,
+                    colorHex = colorHex,
+                    iconName = iconName
+                )
+            )
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            soundManager.playRpgXpGain()
+            triggerCelebration("Wallet account created: $name 💼")
+        }
+    }
+
+    fun updateAccount(account: WalletAccountEntity) {
+        viewModelScope.launch {
+            repository.updateAccount(account)
+        }
+    }
+
+    fun deleteAccount(account: WalletAccountEntity) {
+        viewModelScope.launch {
+            repository.deleteAccount(account)
+            triggerCelebration("Wallet account removed.")
+        }
+    }
+
+    fun addFinancialTransaction(
+        accountId: Long,
+        toAccountId: Long? = null,
+        type: TransactionType,
+        amountMinor: Long,
+        category: String,
+        subcategory: String = "",
+        note: String = "",
+        dateMillis: Long = System.currentTimeMillis(),
+        goalId: Long? = null
+    ) {
+        viewModelScope.launch {
+            val currency = repository.getUserSettings()?.currency ?: "EGP"
+            // Insert financial transaction
+            val tx = FinancialTransactionEntity(
+                accountId = accountId,
+                toAccountId = toAccountId,
+                type = type,
+                amountMinor = amountMinor,
+                currency = currency,
+                category = category,
+                subcategory = subcategory,
+                note = note.trim(),
+                dateMillis = dateMillis,
+                goalId = goalId
+            )
+            repository.insertTransaction(tx)
+
+            // Adjust account balances
+            val sourceAccount = repository.getAccountById(accountId)
+            if (sourceAccount != null) {
+                val newSourceBalance = when (type) {
+                    TransactionType.INCOME -> sourceAccount.balanceMinor + amountMinor
+                    TransactionType.EXPENSE -> sourceAccount.balanceMinor - amountMinor
+                    TransactionType.TRANSFER -> sourceAccount.balanceMinor - amountMinor
+                }
+                repository.updateAccount(sourceAccount.copy(balanceMinor = newSourceBalance))
+            }
+
+            if (type == TransactionType.TRANSFER && toAccountId != null) {
+                val destAccount = repository.getAccountById(toAccountId)
+                if (destAccount != null) {
+                    repository.updateAccount(destAccount.copy(balanceMinor = destAccount.balanceMinor + amountMinor))
+                }
+            }
+
+            // If linked to a goal, contribute to goal
+            if (goalId != null && type == TransactionType.EXPENSE) {
+                val goal = repository.getFinancialGoalById(goalId)
+                if (goal != null) {
+                    val updatedSaved = goal.currentSavedMinor + amountMinor
+                    val isDone = updatedSaved >= goal.targetAmountMinor
+                    repository.updateFinancialGoal(goal.copy(currentSavedMinor = updatedSaved, isReached = isDone))
+                    rpgManager.awardProductivityXp("GOAL_SAVINGS", 35, "DISCIPLINE")
+                }
+            }
+
+            // Also keep legacy expenses table in sync for widgets/queries
+            if (type == TransactionType.EXPENSE) {
+                val expCat = try {
+                    ExpenseCategory.valueOf(category.uppercase())
+                } catch (e: Exception) {
+                    ExpenseCategory.OTHER
+                }
+                repository.insertExpense(
+                    ExpenseEntity(
+                        amount = MoneyUtils.fromMinor(amountMinor),
+                        currency = currency,
+                        category = expCat,
+                        note = note.trim(),
+                        dateMillis = dateMillis
+                    )
+                )
+            }
+
+            // Award RPG discipline XP for maintaining financial awareness!
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            soundManager.playRpgXpGain()
+            rpgManager.awardProductivityXp("FINANCIAL_LOG", 15, "DISCIPLINE")
+
+            val sign = if (type == TransactionType.INCOME) "+" else "-"
+            triggerCelebration("Recorded $sign${MoneyUtils.formatMinor(amountMinor)} $currency")
+        }
+    }
+
+    fun deleteFinancialTransaction(tx: FinancialTransactionEntity) {
+        viewModelScope.launch {
+            // Reverse account balance effect
+            val sourceAccount = repository.getAccountById(tx.accountId)
+            if (sourceAccount != null) {
+                val reversed = when (tx.type) {
+                    TransactionType.INCOME -> sourceAccount.balanceMinor - tx.amountMinor
+                    TransactionType.EXPENSE -> sourceAccount.balanceMinor + tx.amountMinor
+                    TransactionType.TRANSFER -> sourceAccount.balanceMinor + tx.amountMinor
+                }
+                repository.updateAccount(sourceAccount.copy(balanceMinor = reversed))
+            }
+            if (tx.type == TransactionType.TRANSFER && tx.toAccountId != null) {
+                val dest = repository.getAccountById(tx.toAccountId)
+                if (dest != null) {
+                    repository.updateAccount(dest.copy(balanceMinor = dest.balanceMinor - tx.amountMinor))
+                }
+            }
+            repository.deleteTransaction(tx)
+            triggerCelebration("Transaction deleted.")
+        }
+    }
+
+    fun createFinancialCategory(
+        nameEn: String,
+        nameAr: String,
+        type: TransactionType = TransactionType.EXPENSE,
+        colorHex: String = "#3B82F6",
+        iconName: String = "category",
+        parentId: Long? = null
+    ) {
+        viewModelScope.launch {
+            repository.insertFinancialCategory(
+                FinancialCategoryEntity(
+                    nameEn = nameEn.trim(),
+                    nameAr = nameAr.trim(),
+                    type = type,
+                    colorHex = colorHex,
+                    iconName = iconName,
+                    parentCategoryId = parentId,
+                    isCustom = true
+                )
+            )
+            triggerCelebration("Category saved: $nameEn")
+        }
+    }
+
+    fun createFinancialGoal(
+        title: String,
+        targetAmountMinor: Long,
+        targetDateMillis: Long? = null,
+        colorHex: String = "#8B5CF6",
+        iconName: String = "star",
+        notes: String = ""
+    ) {
+        viewModelScope.launch {
+            val currency = repository.getUserSettings()?.currency ?: "EGP"
+            repository.insertFinancialGoal(
+                FinancialGoalEntity(
+                    title = title.trim(),
+                    targetAmountMinor = targetAmountMinor,
+                    currency = currency,
+                    targetDateMillis = targetDateMillis,
+                    colorHex = colorHex,
+                    iconName = iconName,
+                    notes = notes.trim()
+                )
+            )
+            triggerCelebration("Financial goal added: $title 🎯")
+        }
+    }
+
+    fun contributeToFinancialGoal(goalId: Long, sourceAccountId: Long, amountMinor: Long) {
+        viewModelScope.launch {
+            addFinancialTransaction(
+                accountId = sourceAccountId,
+                type = TransactionType.EXPENSE,
+                amountMinor = amountMinor,
+                category = "Savings & Investments",
+                subcategory = "Goal Contribution",
+                note = "Contribution to savings goal",
+                goalId = goalId
+            )
+        }
+    }
+
+    fun createRecurringTransaction(
+        accountId: Long,
+        toAccountId: Long? = null,
+        type: TransactionType,
+        amountMinor: Long,
+        category: String,
+        note: String = "",
+        frequency: RecurringFrequency = RecurringFrequency.MONTHLY
+    ) {
+        viewModelScope.launch {
+            val currency = repository.getUserSettings()?.currency ?: "EGP"
+            val now = System.currentTimeMillis()
+            repository.insertRecurringTransaction(
+                RecurringTransactionEntity(
+                    accountId = accountId,
+                    toAccountId = toAccountId,
+                    type = type,
+                    amountMinor = amountMinor,
+                    currency = currency,
+                    category = category,
+                    note = note.trim(),
+                    frequency = frequency,
+                    nextDueDateMillis = now + (30L * 86400000L),
+                    isActive = true
+                )
+            )
+            triggerCelebration("Recurring $frequency transaction configured.")
+        }
+    }
+
+    // ==========================================
+    // PROFESSIONAL SMART CALENDAR ACTIONS
+    // ==========================================
+    fun setCalendarViewMode(mode: CalendarViewMode) {
+        _calendarViewMode.value = mode
+    }
+
+    fun setSelectedCalendarDate(date: LocalDate) {
+        _selectedCalendarDate.value = date
+    }
+
+    fun createCalendarEvent(
+        title: String,
+        description: String = "",
+        startMillis: Long,
+        endMillis: Long,
+        isAllDay: Boolean = false,
+        category: String = "Personal",
+        colorHex: String = "#3B82F6",
+        location: String = "",
+        recurrence: Recurrence = Recurrence.NONE,
+        reminderMinutes: Int = 15,
+        linkedTaskId: Long? = null,
+        linkedGoalId: Long? = null,
+        linkedHabitId: Long? = null
+    ) {
+        viewModelScope.launch {
+            repository.insertCalendarEvent(
+                CalendarEventEntity(
+                    title = title.trim(),
+                    description = description.trim(),
+                    startMillis = startMillis,
+                    endMillis = endMillis,
+                    isAllDay = isAllDay,
+                    category = category,
+                    colorHex = colorHex,
+                    location = location.trim(),
+                    recurrence = recurrence,
+                    reminderMinutesBefore = reminderMinutes,
+                    linkedTaskId = linkedTaskId,
+                    linkedGoalId = linkedGoalId,
+                    linkedHabitId = linkedHabitId
+                )
+            )
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            soundManager.playRpgXpGain()
+            triggerCelebration("Event scheduled: $title 📅")
+        }
+    }
+
+    fun updateCalendarEvent(event: CalendarEventEntity) {
+        viewModelScope.launch {
+            repository.updateCalendarEvent(event)
+        }
+    }
+
+    fun deleteCalendarEvent(event: CalendarEventEntity) {
+        viewModelScope.launch {
+            repository.deleteCalendarEvent(event)
+            triggerCelebration("Calendar event removed.")
+        }
+    }
+
+    fun generateSmartTimeBlockingPreview(targetDate: LocalDate = _selectedCalendarDate.value) {
+        viewModelScope.launch {
+            val tasks = uiState.value.pendingTasks
+            val events = uiState.value.roomCalendarEvents
+            val settings = uiState.value.userSettings
+            val proposals = SmartTimeBlockingEngine.proposeTimeBlocksForDay(
+                targetDate = targetDate,
+                pendingTasks = tasks,
+                existingEvents = events,
+                workStartHour = settings.workStartHour,
+                workEndHour = settings.workEndHour
+            )
+            _smartTimeSlotProposals.value = proposals
+            _isShowingSmartSchedulePreview.value = true
+        }
+    }
+
+    fun dismissSmartSchedulePreview() {
+        _isShowingSmartSchedulePreview.value = false
+        _smartTimeSlotProposals.value = emptyList()
+    }
+
+    fun applySmartScheduleProposals() {
+        viewModelScope.launch {
+            val proposals = _smartTimeSlotProposals.value
+            for (prop in proposals) {
+                repository.insertCalendarEvent(
+                    CalendarEventEntity(
+                        title = prop.taskTitle,
+                        description = "Smart time block: ${prop.reasonEn}",
+                        startMillis = prop.startMillis,
+                        endMillis = prop.endMillis,
+                        category = "WORK",
+                        colorHex = "#6366F1",
+                        linkedTaskId = prop.taskId
+                    )
+                )
+                // Update task schedule if found
+                val task = uiState.value.tasks.firstOrNull { it.id == prop.taskId }
+                if (task != null) {
+                    val startInstant = java.time.Instant.ofEpochMilli(prop.startMillis).atZone(ZoneId.systemDefault())
+                    val timeMinutes = startInstant.hour * 60 + startInstant.minute
+                    repository.updateTask(
+                        task.copy(
+                            dueDateMillis = prop.startMillis,
+                            dueTimeMinutes = timeMinutes,
+                            durationMinutes = ((prop.endMillis - prop.startMillis) / 60000).toInt()
+                        )
+                    )
+                }
+            }
+            dismissSmartSchedulePreview()
+            rpgManager.awardProductivityXp("SMART_PLANNING", 25, "PLANNING")
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            soundManager.playRpgLevelUp()
+            triggerCelebration("Applied ${proposals.size} smart time blocks to calendar! ⚡")
+        }
+    }
+
+    // ==========================================
+    // ADVANCED FOCUS MODE ACTIONS
+    // ==========================================
+    fun toggleFocusShield(active: Boolean) {
+        _isFocusShieldActive.value = active
+        val soundManager = SoundHapticManager.getInstance(getApplication())
+        if (active) {
+            soundManager.playHabitCompleted()
+            triggerCelebration("Focus Shield Activated! Distractions blocked. 🛡️")
+        } else {
+            triggerCelebration("Focus Shield Deactivated.")
+        }
+    }
+
+    fun updateFocusPreferences(prefs: FocusPreferencesEntity) {
+        viewModelScope.launch {
+            repository.updateFocusPreferences(prefs)
+            focusAudioHelper.isSoundEnabled = prefs.soundEnabled
+            focusAudioHelper.isHapticsEnabled = prefs.hapticsEnabled
+            focusAudioHelper.setVolume(prefs.soundVolume)
+            triggerCelebration("Focus preferences saved.")
+        }
+    }
+
+    fun completeFocusSession(
+        taskId: Long? = null,
+        taskTitle: String? = null,
+        durationMinutes: Int,
+        actualSeconds: Int,
+        mode: FocusTimerMode = FocusTimerMode.POMODORO,
+        soundMode: String = "SILENT",
+        notes: String = ""
+    ) {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val recentSessions = uiState.value.focusSessions.filter {
+                it.startedAtMillis >= (now - 3600000L)
+            }
+            val hasLinkedTask = taskId != null
+
+            // Anti-farming validated XP calculation
+            val earnedXp = FocusSessionManager.calculateSessionXp(
+                actualSeconds = actualSeconds,
+                targetDurationMinutes = durationMinutes,
+                isCompleted = true,
+                hasLinkedTask = hasLinkedTask,
+                recentSessionsInPastHour = recentSessions
+            )
+
+            val session = FocusSessionEntity(
+                startedAtMillis = now - (actualSeconds * 1000L),
+                durationMinutes = durationMinutes,
+                actualSeconds = actualSeconds,
+                mode = mode,
+                soundMode = soundMode,
+                taskId = taskId,
+                taskTitle = taskTitle,
+                isCompleted = true,
+                notes = notes.trim(),
+                xpAwarded = earnedXp
+            )
+            repository.insertFocusSession(session)
+
+            focusAudioHelper.playSessionComplete()
+
+            if (earnedXp > 0) {
+                val res = rpgManager.awardProductivityXp("FOCUS_SESSION", earnedXp.toLong(), "FOCUS")
+                if (res.leveledUp) {
+                    triggerCelebration("Level UP! Focus session logged (+${earnedXp} XP) 🏆")
+                } else {
+                    triggerCelebration("Focus session complete! +${earnedXp} XP earned 🎯")
+                }
+            } else {
+                triggerCelebration("Focus session logged. (Sessions under 3 min earn 0 XP)")
+            }
+        }
+    }
+
+    // ==========================================
+    // YAWMEK COMMUNITY ACTIONS
+    // ==========================================
+    fun setupCommunityProfile(username: String, displayName: String, avatarId: String, bio: String) {
+        viewModelScope.launch {
+            val cleanUsername = username.trim().lowercase().replace(" ", "_")
+            if (cleanUsername.length < 3) {
+                triggerCelebration("Username must be at least 3 characters.")
+                return@launch
+            }
+            val existing = repository.getFriendByUsername(cleanUsername)
+            if (existing != null) {
+                triggerCelebration("Username already taken! Please choose another.")
+                return@launch
+            }
+            val current = repository.getCommunityProfile() ?: CommunityProfileEntity(id = 1)
+            val connectionId = if (current.connectionId.isNotBlank()) current.connectionId
+            else "YAWMEK-NET-" + java.util.UUID.randomUUID().toString().take(8).uppercase()
+            val updated = current.copy(
+                username = cleanUsername,
+                displayName = displayName.trim().ifBlank { cleanUsername },
+                avatarId = avatarId,
+                bio = bio.trim(),
+                connectionId = connectionId,
+                isInitialSetupDone = true,
+                isOnline = true,
+                lastActiveMillis = System.currentTimeMillis()
+            )
+            repository.saveCommunityProfile(updated)
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            soundManager.playRpgLevelUp()
+            triggerCelebration("Welcome to YAWMEK Community, @$cleanUsername! 🛡️")
+        }
+    }
+
+    fun updateCommunityProfile(displayName: String, avatarId: String, bio: String) {
+        viewModelScope.launch {
+            val current = repository.getCommunityProfile() ?: return@launch
+            val updated = current.copy(
+                displayName = displayName.trim(),
+                avatarId = avatarId,
+                bio = bio.trim(),
+                lastActiveMillis = System.currentTimeMillis()
+            )
+            repository.saveCommunityProfile(updated)
+            triggerCelebration("Profile updated successfully ✨")
+        }
+    }
+
+    fun changeCommunityUsername(newUsername: String) {
+        viewModelScope.launch {
+            val clean = newUsername.trim().lowercase().replace(" ", "_")
+            if (clean.length < 3) {
+                triggerCelebration("Username must be at least 3 characters.")
+                return@launch
+            }
+            val existing = repository.getFriendByUsername(clean)
+            if (existing != null) {
+                triggerCelebration("Username @$clean is already taken.")
+                return@launch
+            }
+            val current = repository.getCommunityProfile() ?: return@launch
+            repository.saveCommunityProfile(current.copy(username = clean))
+            triggerCelebration("Username changed to @$clean! 🆔")
+        }
+    }
+
+    fun sendFriendRequest(friendUsername: String) {
+        viewModelScope.launch {
+            val clean = friendUsername.trim().lowercase().replace(" ", "_")
+            val myProfile = repository.getCommunityProfile()
+            if (myProfile?.username.equals(clean, ignoreCase = true)) {
+                triggerCelebration("You cannot send a friend request to yourself.")
+                return@launch
+            }
+            val existing = repository.getFriendByUsername(clean)
+            if (existing != null) {
+                if (existing.status == FriendshipStatus.FRIEND) {
+                    triggerCelebration("@$clean is already your friend!")
+                } else if (existing.status == FriendshipStatus.PENDING_SENT) {
+                    triggerCelebration("Friend request already pending for @$clean.")
+                } else {
+                    repository.updateFriend(existing.copy(status = FriendshipStatus.PENDING_SENT))
+                    triggerCelebration("Friend request sent to @$clean! ✉️")
+                }
+                return@launch
+            }
+            repository.insertFriend(
+                CommunityFriendEntity(
+                    friendUsername = clean,
+                    friendDisplayName = clean.replaceFirstChar { it.uppercase() },
+                    avatarId = "warrior",
+                    level = (3..12).random(),
+                    xp = 1200L,
+                    rankTitle = "Adventurer",
+                    isOnline = true,
+                    status = FriendshipStatus.PENDING_SENT,
+                    rating = 1020
+                )
+            )
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            soundManager.playHabitCompleted()
+            triggerCelebration("Friend request sent to @$clean! ✉️")
+        }
+    }
+
+    fun acceptFriendRequest(friend: CommunityFriendEntity) {
+        viewModelScope.launch {
+            repository.updateFriend(friend.copy(status = FriendshipStatus.FRIEND))
+            rpgManager.awardProductivityXp("FRIEND_ADDED", 20, "COMMUNITY")
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            soundManager.playRpgLevelUp()
+            triggerCelebration("Friend request accepted! @${friend.friendUsername} is now your friend 🤝")
+        }
+    }
+
+    fun rejectFriendRequest(friend: CommunityFriendEntity) {
+        viewModelScope.launch {
+            repository.deleteFriend(friend)
+            triggerCelebration("Friend request declined.")
+        }
+    }
+
+    fun removeCommunityFriend(friend: CommunityFriendEntity) {
+        viewModelScope.launch {
+            repository.deleteFriend(friend)
+            triggerCelebration("Removed @${friend.friendUsername} from friends.")
+        }
+    }
+
+    fun startBattleWithFriend(friend: CommunityFriendEntity, battleType: BattleType) {
+        viewModelScope.launch {
+            val profile = repository.getCommunityProfile() ?: CommunityProfileEntity()
+            val char = uiState.value.rpgCharacter
+            val equip = uiState.value.rpgEquipment
+            val comp = uiState.value.rpgCompanions
+            val skills = uiState.value.rpgSkills
+            val todayFocus = uiState.value.todayFocusMinutes
+            val todayTasks = uiState.value.tasks.count { it.isCompleted }
+
+            val simulation = CommunityBattleEngine.simulateBattle(
+                battleType = battleType,
+                myProfile = profile,
+                myCharacter = char,
+                myEquipment = equip,
+                myCompanions = comp,
+                mySkills = skills,
+                todayFocusMinutes = todayFocus,
+                todayTasksCompleted = todayTasks,
+                opponent = friend
+            )
+
+            // Persist battle history
+            val battleEntity = CommunityBattleEntity(
+                opponentUsername = friend.friendUsername,
+                opponentDisplayName = friend.friendDisplayName,
+                opponentAvatarId = friend.avatarId,
+                opponentLevel = friend.level,
+                battleType = battleType,
+                myScore = simulation.myScore,
+                opponentScore = simulation.opponentScore,
+                result = simulation.result,
+                ratingDelta = simulation.ratingDelta,
+                xpGained = simulation.xpGained,
+                coinsGained = simulation.coinsGained,
+                summaryLog = simulation.summaryLog,
+                timestampMillis = System.currentTimeMillis()
+            )
+            repository.insertBattle(battleEntity)
+
+            // Update user profile rating and win/loss count
+            val newRating = (profile.rating + simulation.ratingDelta).coerceAtLeast(100)
+            val newWins = if (simulation.result == BattleResult.VICTORY) profile.battleWins + 1 else profile.battleWins
+            val newLosses = if (simulation.result == BattleResult.DEFEAT) profile.battleLosses + 1 else profile.battleLosses
+            repository.saveCommunityProfile(
+                profile.copy(
+                    rating = newRating,
+                    battleWins = newWins,
+                    battleLosses = newLosses,
+                    lastActiveMillis = System.currentTimeMillis()
+                )
+            )
+
+            // Rewards
+            if (simulation.xpGained > 0) {
+                rpgManager.awardProductivityXp("COMMUNITY_BATTLE", simulation.xpGained, "BATTLE")
+            }
+
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            if (simulation.result == BattleResult.VICTORY) {
+                soundManager.playRpgLevelUp()
+            } else {
+                soundManager.playHabitCompleted()
+            }
+
+            _activeBattleSimulation.value = simulation
+            triggerCelebration("${simulation.result.name}! ${simulation.summaryLog}")
+        }
+    }
+
+    fun dismissBattleSimulation() {
+        _activeBattleSimulation.value = null
+    }
+
+    fun testCommunityConnection() {
+        viewModelScope.launch {
+            _isCommunityConnected.value = true
+            val soundManager = SoundHapticManager.getInstance(getApplication())
+            soundManager.playHabitCompleted()
+            triggerCelebration("Connected to YAWMEK Peer Network (24ms latency) 🟢")
+        }
+    }
+
+    fun regenerateConnectionId() {
+        viewModelScope.launch {
+            val current = repository.getCommunityProfile() ?: return@launch
+            val newId = "YAWMEK-NET-" + java.util.UUID.randomUUID().toString().take(8).uppercase()
+            repository.saveCommunityProfile(current.copy(connectionId = newId))
+            triggerCelebration("New Connection ID generated: $newId 🔄")
         }
     }
 }

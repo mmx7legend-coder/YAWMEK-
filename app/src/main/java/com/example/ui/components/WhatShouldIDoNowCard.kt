@@ -45,12 +45,12 @@ fun WhatShouldIDoNowHeroCard(
     val headerTitle = if (isArabic) "أعمل إيه دلوقتي؟" else "What should I do now?"
     val headerSubtitle = if (isArabic) "المقترح الأنسب لجدولك وطاقتك الآن" else "Smart recommendation based on your day"
 
-    // Gradient border for hero emphasis
+    // Gradient border for hero emphasis (Midnight Sapphire + Warm Amber)
     val heroBrush = Brush.horizontalGradient(
         colors = listOf(
-            BrandBlue,
-            BrandAmberLight,
-            ColorHabit
+            SapphirePrimary,
+            WarmAmberGold,
+            SapphireAccent
         )
     )
 
