@@ -13,7 +13,7 @@ class MoneyCalculatorTest {
             WalletAccountEntity(
                 id = 1L,
                 name = "Main Checking",
-                type = AccountType.CHECKING,
+                type = AccountType.BANK,
                 balanceMinor = 250000L, // 2,500.00
                 currency = "USD",
                 iconName = "account_balance",

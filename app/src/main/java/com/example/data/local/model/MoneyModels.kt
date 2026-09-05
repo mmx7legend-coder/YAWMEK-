@@ -2,151 +2,147 @@ package com.example.data.local.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
+import java.util.Locale
 
-// Money system enums
-enum class MoneyTransactionType {
-    INCOME, EXPENSE, TRANSFER
+enum class AccountType(val titleEn: String, val titleAr: String, val defaultIcon: String) {
+    CASH("Cash", "نقدي", "wallet"),
+    BANK("Bank Account", "حساب بنكي", "account_balance"),
+    SAVINGS("Savings Vault", "خزنة التوفير", "savings"),
+    CREDIT_CARD("Credit Card", "بطاقة ائتمان", "credit_card"),
+    DIGITAL_WALLET("Digital Wallet", "محفظة إلكترونية", "phone_android"),
+    INVESTMENT("Investment", "استثمار", "trending_up")
 }
 
-enum class MoneyCategory {
-    // Income
-    SALARY, FREELANCE, INVESTMENT, BONUS, GIFT, OTHER_INCOME,
-    // Expense
-    FOOD, TRANSPORT, EDUCATION, SHOPPING, BILLS, ENTERTAINMENT, HEALTH, UTILITIES, RENT, GROCERIES, OTHER_EXPENSE
-}
-
-// Wallet/Account entity
-@Entity(tableName = "wallets")
-data class WalletEntity(
+@Entity(tableName = "wallet_accounts")
+data class WalletAccountEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
-    val accountType: String = "CHECKING", // CHECKING, SAVINGS, CASH, CARD
+    val type: AccountType = AccountType.CASH,
+    val balanceMinor: Long = 0L, // Stored in minor currency units (cents / piasters)
     val currency: String = "EGP",
-    val balance: Long = 0L, // In minor units (cents, fils, etc.)
+    val colorHex: String = "#10B981",
+    val iconName: String = "wallet",
     val isDefault: Boolean = false,
-    val colorHex: String = "#3B82F6",
+    val isArchived: Boolean = false,
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Transaction entity (unified for income, expense, transfer)
-@Entity(tableName = "transactions")
-data class TransactionEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val walletId: Long,
-    val type: MoneyTransactionType = MoneyTransactionType.EXPENSE,
-    val amount: Long = 0L, // In minor units
-    val currency: String = "EGP",
-    val category: MoneyCategory = MoneyCategory.OTHER_EXPENSE,
-    val description: String = "",
-    val dateMillis: Long = System.currentTimeMillis(),
-    val isRecurring: Boolean = false,
-    val recurringPattern: String = "", // DAILY, WEEKLY, MONTHLY, YEARLY
-    val recurringEndDate: Long? = null,
-    val tags: String = "", // Comma-separated
-    val attachmentPath: String? = null,
-    val createdAtMillis: Long = System.currentTimeMillis()
-)
+enum class TransactionType(val titleEn: String, val titleAr: String) {
+    EXPENSE("Expense", "مصروف"),
+    INCOME("Income", "دخل"),
+    TRANSFER("Transfer", "تحويل")
+}
 
-// Income entry (streamlined from transactions)
-@Entity(tableName = "incomes")
-data class IncomeEntity(
+@Entity(tableName = "financial_transactions")
+data class FinancialTransactionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val walletId: Long,
-    val amount: Long = 0L, // In minor units
+    val accountId: Long, // Source account
+    val toAccountId: Long? = null, // Destination account for transfers
+    val type: TransactionType = TransactionType.EXPENSE,
+    val amountMinor: Long, // Precise integer minor units (always positive)
     val currency: String = "EGP",
-    val source: String = "Salary", // Salary, Freelance, Investment, etc.
-    val description: String = "",
-    val dateMillis: Long = System.currentTimeMillis(),
-    val isRecurring: Boolean = false,
-    val recurringPattern: String = "", // DAILY, WEEKLY, MONTHLY, YEARLY
-    val createdAtMillis: Long = System.currentTimeMillis()
-)
-
-// Expense entry
-@Entity(tableName = "expenses_v2")
-data class ExpenseV2Entity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val walletId: Long,
-    val amount: Long = 0L, // In minor units
-    val currency: String = "EGP",
-    val category: MoneyCategory = MoneyCategory.OTHER_EXPENSE,
+    val category: String = "OTHER",
     val subcategory: String = "",
-    val description: String = "",
+    val note: String = "",
     val dateMillis: Long = System.currentTimeMillis(),
     val isRecurring: Boolean = false,
-    val recurringPattern: String = "", // DAILY, WEEKLY, MONTHLY, YEARLY
-    val tags: String = "", // Comma-separated
+    val recurringRuleId: Long? = null,
+    val goalId: Long? = null, // Set if this is a contribution to a financial goal
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Budget entity (updated to be wallet-specific and more detailed)
-@Entity(tableName = "budgets_v2")
-data class BudgetV2Entity(
+@Entity(tableName = "financial_categories")
+data class FinancialCategoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val walletId: Long,
-    val category: MoneyCategory? = null, // null means all categories
-    val period: BudgetPeriod = BudgetPeriod.MONTHLY,
-    val limitAmount: Long = 0L, // In minor units
+    val nameEn: String,
+    val nameAr: String,
+    val type: TransactionType = TransactionType.EXPENSE,
+    val iconName: String = "category",
+    val colorHex: String = "#3B82F6",
+    val parentCategoryId: Long? = null,
+    val isCustom: Boolean = false
+)
+
+enum class RecurringFrequency(val titleEn: String, val titleAr: String) {
+    DAILY("Daily", "يومي"),
+    WEEKLY("Weekly", "أسبوعي"),
+    MONTHLY("Monthly", "شهري"),
+    YEARLY("Yearly", "سنوي")
+}
+
+@Entity(tableName = "recurring_transactions")
+data class RecurringTransactionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val accountId: Long,
+    val toAccountId: Long? = null,
+    val type: TransactionType = TransactionType.EXPENSE,
+    val amountMinor: Long,
     val currency: String = "EGP",
-    val alertThreshold: Int = 80, // Alert when spending reaches this %
-    val rollover: Boolean = false, // Roll over unused budget to next period
+    val category: String = "OTHER",
+    val subcategory: String = "",
+    val note: String = "",
+    val frequency: RecurringFrequency = RecurringFrequency.MONTHLY,
+    val nextDueDateMillis: Long = System.currentTimeMillis(),
+    val isActive: Boolean = true,
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Savings goal
-@Entity(tableName = "savings_goals")
-data class SavingsGoalEntity(
+@Entity(tableName = "financial_goals")
+data class FinancialGoalEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val walletId: Long,
     val title: String,
-    val description: String = "",
-    val targetAmount: Long = 0L, // In minor units
-    val currentAmount: Long = 0L, // In minor units
+    val targetAmountMinor: Long,
+    val currentSavedMinor: Long = 0L,
     val currency: String = "EGP",
     val targetDateMillis: Long? = null,
-    val category: String = "General",
     val colorHex: String = "#8B5CF6",
-    val isCompleted: Boolean = false,
+    val iconName: String = "savings",
+    val isReached: Boolean = false,
+    val notes: String = "",
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-// Savings goal contribution
-@Entity(tableName = "goal_contributions")
-data class GoalContributionEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val goalId: Long,
-    val amount: Long = 0L, // In minor units
-    val dateMillis: Long = System.currentTimeMillis(),
-    val note: String = "",
-    val createdAtMillis: Long = System.currentTimeMillis()
-)
+object MoneyUtils {
+    /**
+     * Converts a user-typed double or decimal to integer minor units (e.g. 10.50 -> 1050).
+     */
+    fun toMinor(amount: Double): Long {
+        return Math.round(amount * 100.0)
+    }
 
-// Financial insight/summary (calculated)
-@Entity(tableName = "financial_summaries")
-data class FinancialSummaryEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val walletId: Long,
-    val period: String = "MONTHLY", // DAILY, WEEKLY, MONTHLY, YEARLY
-    val periodStartMillis: Long,
-    val periodEndMillis: Long,
-    val totalIncome: Long = 0L, // In minor units
-    val totalExpense: Long = 0L, // In minor units
-    val netSavings: Long = 0L, // totalIncome - totalExpense
-    val savingsRate: Double = 0.0, // savingsRate = netSavings / totalIncome * 100
-    val topExpenseCategory: String = "",
-    val averageDailyExpense: Long = 0L, // In minor units
-    val createdAtMillis: Long = System.currentTimeMillis()
-)
+    fun toMinor(amountStr: String): Long {
+        val clean = amountStr.trim().replace(",", ".")
+        val doubleVal = clean.toDoubleOrNull() ?: 0.0
+        return toMinor(doubleVal)
+    }
 
-// Transfer between wallets
-@Entity(tableName = "transfers")
-data class TransferEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val fromWalletId: Long,
-    val toWalletId: Long,
-    val amount: Long = 0L, // In minor units
-    val currency: String = "EGP",
-    val description: String = "",
-    val dateMillis: Long = System.currentTimeMillis(),
-    val createdAtMillis: Long = System.currentTimeMillis()
-)
+    /**
+     * Converts minor integer units back to standard double for display or calculations.
+     */
+    fun fromMinor(minor: Long): Double {
+        return minor / 100.0
+    }
+
+    /**
+     * Formats minor integer units safely with currency string.
+     * Example: 15050L -> "150.50 EGP"
+     */
+    fun formatMinor(minor: Long, currency: String = "EGP"): String {
+        val units = minor / 100
+        val decimals = Math.abs(minor % 100)
+        val df = DecimalFormat("#,##0", DecimalFormatSymbols(Locale.US))
+        val formattedUnits = df.format(units)
+        return if (decimals == 0L) {
+            "$formattedUnits $currency"
+        } else {
+            val decStr = String.format(Locale.US, "%02d", decimals)
+            "$formattedUnits.$decStr $currency"
+        }
+    }
+
+    fun formatDouble(amount: Double, currency: String = "EGP"): String {
+        return formatMinor(toMinor(amount), currency)
+    }
+}

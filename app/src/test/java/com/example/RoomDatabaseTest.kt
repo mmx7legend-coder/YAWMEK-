@@ -3,6 +3,7 @@ package com.example
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.data.local.AppDatabase
 import com.example.data.local.model.*
 import kotlinx.coroutines.flow.first
@@ -12,24 +13,26 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
+import java.io.IOException
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@RunWith(AndroidJUnit4::class)
 class RoomDatabaseTest {
 
     private lateinit var database: AppDatabase
 
     @Before
-    fun initDb() {
+    fun createDb() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
+        database = Room.inMemoryDatabaseBuilder(
+            context,
+            AppDatabase::class.java
+        )
             .allowMainThreadQueries()
             .build()
     }
 
     @After
+    @Throws(IOException::class)
     fun closeDb() {
         database.close()
     }
@@ -38,11 +41,10 @@ class RoomDatabaseTest {
     fun testTaskInsertAndRetrieve() = runBlocking {
         val task = TaskEntity(
             title = "Build APK for YAWMEK",
-            category = Category.WORK,
+            category = TaskCategory.WORK,
             priority = Priority.HIGH,
             isCompleted = false,
-            estimatedMinutes = 45,
-            isDailyFrog = true
+            durationMinutes = 45
         )
         val insertedId = database.taskDao().insertTask(task)
         assertTrue(insertedId > 0)
@@ -50,8 +52,8 @@ class RoomDatabaseTest {
         val allTasks = database.taskDao().getAllTasks().first()
         assertEquals(1, allTasks.size)
         assertEquals("Build APK for YAWMEK", allTasks[0].title)
-        assertTrue(allTasks[0].isDailyFrog)
         assertEquals(Priority.HIGH, allTasks[0].priority)
+        assertEquals(45, allTasks[0].durationMinutes)
     }
 
     @Test
@@ -67,7 +69,7 @@ class RoomDatabaseTest {
         val accId = database.walletAccountDao().insertAccount(account)
         assertTrue(accId > 0)
 
-        val accounts = database.walletAccountDao().getAllAccounts().first()
+        val accounts = database.walletAccountDao().getAllActiveAccounts().first()
         assertEquals(1, accounts.size)
         assertEquals("Emergency Fund", accounts[0].name)
         assertEquals(500000L, accounts[0].balanceMinor)
@@ -78,17 +80,16 @@ class RoomDatabaseTest {
         val habit = HabitEntity(
             title = "Morning Exercise",
             targetDaysPerWeek = 5,
-            icon = "directions_run",
-            color = "#3B82F6",
-            streak = 3
+            iconKey = "check",
+            colorHex = "#3B82F6"
         )
         val habitId = database.habitDao().insertHabit(habit)
         assertTrue(habitId > 0)
 
-        val habits = database.habitDao().getAllHabits().first()
+        val habits = database.habitDao().getAllActiveHabits().first()
         assertEquals(1, habits.size)
         assertEquals("Morning Exercise", habits[0].title)
-        assertEquals(3, habits[0].streak)
+        assertEquals(5, habits[0].targetDaysPerWeek)
     }
 
     @Test
@@ -109,7 +110,7 @@ class RoomDatabaseTest {
         )
         database.rpgDao().insertOrUpdateCharacter(character)
 
-        val loaded = database.rpgDao().getCharacterOnce()
+        val loaded = database.rpgDao().getCharacter()
         assertNotNull(loaded)
         assertEquals("Hero of Yawmek", loaded?.name)
         assertEquals(5, loaded?.level)
