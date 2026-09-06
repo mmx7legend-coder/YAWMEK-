@@ -101,7 +101,7 @@ fun OnboardingScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Indicator dots
+                // Indicator dots (No Skip, Mandatory Setup)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     steps.indices.forEach { index ->
                         Box(
@@ -119,16 +119,7 @@ fun OnboardingScreen(
                     }
                 }
 
-                if (currentStep < steps.size - 1) {
-                    TextButton(onClick = { currentStep = steps.size - 1 }) {
-                        Text(
-                            text = if (isArabic) "تخطي" else "Skip",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    Spacer(modifier = Modifier.width(48.dp))
-                }
+                Spacer(modifier = Modifier.width(48.dp))
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -189,21 +180,37 @@ fun OnboardingScreen(
 
                     // If final step: Name input & priority categories
                     if (step == steps.size - 1) {
-                        Spacer(modifier = Modifier.height(28.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
 
                         OutlinedTextField(
                             value = userName,
                             onValueChange = { userName = it },
-                            label = { Text(if (isArabic) "اسمك أو اللقب" else "Your Name") },
-                            placeholder = { Text(if (isArabic) "مثال: محمد" else "e.g. Alex") },
+                            label = { Text(if (isArabic) "اسمك الكريم (مطلوب)" else "Your Name (Required)") },
+                            placeholder = { Text(if (isArabic) "مثال: أحمد، سارة، محمد" else "e.g. Alex, Sarah, Omar") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("onboarding_name_input"),
                             shape = RoundedCornerShape(14.dp),
-                            singleLine = true
+                            singleLine = true,
+                            isError = userName.isNotBlank() && userName.trim().length < 2,
+                            supportingText = {
+                                if (userName.trim().length >= 2) {
+                                    Text(
+                                        text = if (isArabic) "يسعدنا انضمامك يا ${userName.trim()}! ✨" else "Nice to meet you, ${userName.trim()}! ✨",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
+                                    )
+                                } else {
+                                    Text(
+                                        text = if (isArabic) "يرجى كتابة اسمك للمتابعة" else "Please enter your name to continue",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
                         )
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         Text(
                             text = if (isArabic) "ما هي مجالات تركيزك الحالية؟" else "What matters most to you right now?",
@@ -247,15 +254,22 @@ fun OnboardingScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
+            val isContinueEnabled = if (currentStep == steps.size - 1) {
+                userName.trim().length >= 2
+            } else {
+                true
+            }
+
             // Bottom Navigation Button
             Button(
                 onClick = {
                     if (currentStep < steps.size - 1) {
                         currentStep++
                     } else {
-                        onComplete(userName.ifBlank { if (isArabic) "صديقي" else "Friend" }, selectedPriorities.toList())
+                        onComplete(userName.trim(), selectedPriorities.toList())
                     }
                 },
+                enabled = isContinueEnabled,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)

@@ -36,12 +36,15 @@ fun ProfileScreen(
     onCurrencyChange: (String) -> Unit,
     onResetAllData: () -> Unit,
     onOpenAccountSync: () -> Unit = {},
-    onUpdateNotificationPreferences: (Boolean, Boolean, Boolean, Boolean) -> Unit = { _, _, _, _ -> }
+    onUpdateNotificationPreferences: (Boolean, Boolean, Boolean, Boolean) -> Unit = { _, _, _, _ -> },
+    onUpdateUserName: (String) -> Unit = {}
 ) {
     val language = uiState.userSettings.language
     val isArabic = language == AppLanguage.ARABIC
     val userName = uiState.userSettings.userName.ifBlank { if (isArabic) "صديقي" else "User" }
     var showResetDialog by remember { mutableStateOf(false) }
+    var showEditNameDialog by remember { mutableStateOf(false) }
+    var editingName by remember(userName) { mutableStateOf(userName) }
 
     val currencies = listOf("EGP", "USD", "EUR", "SAR", "AED", "KWD", "QAR", "GBP")
 
@@ -93,7 +96,7 @@ fun ProfileScreen(
                         )
                     }
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = userName,
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
@@ -104,6 +107,24 @@ fun ProfileScreen(
                             text = if (isArabic) "مساحتك اليومية في يومك" else "Personal YAWMEK Workspace",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    IconButton(
+                        onClick = {
+                            editingName = userName
+                            showEditNameDialog = true
+                        },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Edit,
+                            contentDescription = if (isArabic) "تعديل الاسم" else "Edit Name",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -554,6 +575,50 @@ fun ProfileScreen(
                 Text(if (isArabic) "إعادة تعيين مساحة العمل بالكامل" else "Reset Workspace to Clean State")
             }
         }
+    }
+
+    if (showEditNameDialog) {
+        AlertDialog(
+            onDismissRequest = { showEditNameDialog = false },
+            title = { Text(if (isArabic) "تعديل اسمك" else "Edit Your Name") },
+            text = {
+                Column {
+                    Text(
+                        text = if (isArabic) "اكتب الاسم الذي تود أن يناديك به التطبيق:" else "Enter the name you'd like YAWMEK to call you:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = editingName,
+                        onValueChange = { editingName = it },
+                        singleLine = true,
+                        placeholder = { Text(if (isArabic) "اسمك الكريم" else "Your name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmed = editingName.trim()
+                        if (trimmed.isNotBlank()) {
+                            onUpdateUserName(trimmed)
+                            showEditNameDialog = false
+                        }
+                    },
+                    enabled = editingName.isNotBlank()
+                ) {
+                    Text(if (isArabic) "حفظ التغيير" else "Save Changes")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditNameDialog = false }) {
+                    Text(if (isArabic) "إلغاء" else "Cancel")
+                }
+            }
+        )
     }
 
     if (showResetDialog) {

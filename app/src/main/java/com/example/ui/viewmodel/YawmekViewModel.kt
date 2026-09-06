@@ -36,6 +36,7 @@ import com.example.domain.focus.FocusSessionManager
 import com.example.domain.focus.FocusAnalytics
 import com.example.domain.community.CommunityBattleEngine
 import com.example.domain.community.BattleSimulationResult
+import com.example.domain.ai.*
 import com.example.ui.widget.YawmekWidgetUpdater
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -47,6 +48,9 @@ data class ChatMessage(
     val isUser: Boolean,
     val text: String,
     val planItems: List<AiDailyPlanItem> = emptyList(),
+    val structuredAction: StructuredAiAction? = null,
+    val planHealth: PlanHealthStatus? = null,
+    val productivityReport: ProductivityReport? = null,
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -613,6 +617,14 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun updateUserName(name: String) {
+        viewModelScope.launch {
+            val current = repository.getUserSettings() ?: UserSettingsEntity()
+            repository.updateUserSettings(current.copy(userName = name.trim()))
+            triggerCelebration(if (current.language == AppLanguage.ARABIC) "تم تحديث اسمك بنجاح! ✨" else "Your name has been updated! ✨")
+        }
+    }
+
     fun setLanguage(language: AppLanguage) {
         viewModelScope.launch {
             val current = repository.getUserSettings() ?: UserSettingsEntity()
@@ -906,7 +918,7 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    // YAWMEK AI Interaction
+    // YAWMEK AI Interaction & Personal Productivity Intelligence Engine
     fun sendAiPrompt(prompt: String) {
         if (prompt.isBlank()) return
         val userMsg = ChatMessage(isUser = true, text = prompt.trim())
@@ -915,40 +927,33 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
 
         viewModelScope.launch {
             val state = uiState.value
-            val fin = state.financialOverview
-            val finSummary = if (fin != null) {
-                "Net Worth: ${MoneyUtils.formatMinor(fin.totalNetWorthMinor)}, " +
-                "Month Income: ${MoneyUtils.formatMinor(fin.totalIncomeMinor)}, " +
-                "Month Expense: ${MoneyUtils.formatMinor(fin.totalExpenseMinor)}, " +
-                "Savings Rate: ${fin.savingsRatePercent.toInt()}%, " +
-                "Budget Health: ${fin.budgetHealthScore}/100"
-            } else ""
-
-            val calSummary = "${state.roomCalendarEvents.size} events on calendar today. " +
-                if (state.conflictingEventIds.isNotEmpty()) "${state.conflictingEventIds.size} overlaps detected." else "No conflicts."
-
-            val focSummary = "${state.focusAnalytics.todayMinutes} mins focused today. Streak: ${state.focusAnalytics.streakDays} days."
-
-            val contextData = UserContextData(
+            val ctx = OrchestratorContext(
+                context = getApplication(),
                 userName = state.userSettings.userName,
                 language = state.userSettings.language,
                 currency = state.userSettings.currency,
                 tasks = state.tasks,
-                pendingTasksSummary = state.pendingTasks.take(5).joinToString(", ") { "${it.title} (${it.priority})" },
-                todaySpending = state.todaySpending,
-                habitsSummary = state.habits.take(5).joinToString(", ") { it.title },
-                financialSummary = finSummary,
-                calendarSummary = calSummary,
-                focusSummary = focSummary
+                habits = state.habits,
+                habitLogs = state.habitLogs,
+                goals = state.goals,
+                milestones = state.milestones,
+                focusSessions = state.focusSessions,
+                calendarEvents = state.calendarEvents,
+                financialOverview = state.financialOverview,
+                workStartHour = state.userSettings.workStartHour,
+                workEndHour = state.userSettings.workEndHour
             )
 
-            val aiResult: AiResponseResult = YawmekAiEngine.generateAiAdvice(prompt, contextData)
+            val aiResult = YawmekAiOrchestrator.processPrompt(prompt, ctx)
             _isAiThinking.value = false
 
             val assistantMsg = ChatMessage(
                 isUser = false,
                 text = aiResult.messageText,
-                planItems = aiResult.suggestedPlan
+                planItems = aiResult.suggestedPlan,
+                structuredAction = aiResult.structuredAction,
+                planHealth = aiResult.planHealth,
+                productivityReport = aiResult.productivityReport
             )
             _chatMessages.update { it + assistantMsg }
         }
@@ -958,7 +963,6 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             val todayMillis = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
             for (item in plan) {
-                // Parse timeFormatted
                 val parsedDraft = NaturalLanguageParser.parse("at ${item.timeFormatted}")
                 repository.insertTask(
                     TaskEntity(
@@ -973,6 +977,95 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
                 )
             }
             triggerCelebration("Plan applied to today's schedule!")
+        }
+    }
+
+    fun applyGoalRoadmap(roadmap: GoalRoadmapProposal) {
+        viewModelScope.launch {
+            val targetMillis = System.currentTimeMillis() + (roadmap.totalDays * 86400000L)
+            val goal = GoalEntity(
+                title = roadmap.goalTitle,
+                description = roadmap.description,
+                category = roadmap.category,
+                targetDateMillis = targetMillis
+            )
+            val goalId = repository.insertGoal(goal)
+
+            roadmap.milestones.forEachIndexed { idx, m ->
+                repository.insertMilestone(
+                    MilestoneEntity(
+                        goalId = goalId,
+                        title = m.title,
+                        orderIndex = idx
+                    )
+                )
+            }
+
+            val todayMillis = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            roadmap.tasks.forEach { t ->
+                val due = todayMillis + (t.targetDayOffset * 86400000L)
+                val taskId = repository.insertTask(
+                    TaskEntity(
+                        title = t.title,
+                        durationMinutes = t.durationMinutes,
+                        priority = t.priority,
+                        dueDateMillis = due,
+                        category = when (roadmap.category.lowercase()) {
+                            "education" -> TaskCategory.STUDY
+                            "health" -> TaskCategory.HEALTH
+                            "work" -> TaskCategory.WORK
+                            else -> TaskCategory.PERSONAL
+                        }
+                    )
+                )
+                t.subtasks.forEach { st ->
+                    repository.insertSubtask(
+                        SubtaskEntity(
+                            taskId = taskId,
+                            title = st
+                        )
+                    )
+                }
+            }
+
+            if (roadmap.recommendedHabitTitle.isNotBlank()) {
+                repository.insertHabit(
+                    HabitEntity(
+                        title = roadmap.recommendedHabitTitle,
+                        category = roadmap.category,
+                        frequency = roadmap.recommendedHabitFrequency
+                    )
+                )
+            }
+
+            rpgManager.awardProductivityXp("ROADMAP_CREATED", 50, "PLANNING")
+            triggerCelebration("Roadmap, Milestones & Tasks created!")
+        }
+    }
+
+    fun applyRescheduleProposal(proposal: RescheduleProposal) {
+        viewModelScope.launch {
+            proposal.items.forEach { item ->
+                val updated = item.task.copy(
+                    dueDateMillis = item.newDueDateMillis,
+                    dueTimeMinutes = item.newDueTimeMinutes
+                )
+                repository.updateTask(updated)
+            }
+            triggerCelebration("${proposal.items.size} tasks rescheduled!")
+        }
+    }
+
+    fun applyHabitStack(newHabitTitle: String, category: String = "Personal") {
+        viewModelScope.launch {
+            repository.insertHabit(
+                HabitEntity(
+                    title = newHabitTitle,
+                    category = category,
+                    frequency = HabitFrequency.DAILY
+                )
+            )
+            triggerCelebration("Habit added to your tracker!")
         }
     }
 

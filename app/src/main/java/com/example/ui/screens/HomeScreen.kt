@@ -60,8 +60,15 @@ fun HomeScreen(
     val isArabic = language == AppLanguage.ARABIC
     val userName = uiState.userSettings.userName.ifBlank { if (isArabic) "صديقي" else "there" }
 
-    // Formatted current date
+    // Formatted current date & dynamic time of day greeting
     val today = LocalDate.now()
+    val currentHour = java.time.LocalTime.now().hour
+    val dynamicGreeting = when {
+        currentHour in 5..11 -> if (isArabic) "صباح الخير، $userName ☀️" else "Good morning, $userName ☀️"
+        currentHour in 12..16 -> if (isArabic) "طاب يومك، $userName 🌤️" else "Good afternoon, $userName 🌤️"
+        currentHour in 17..22 -> if (isArabic) "مساء الخير، $userName 🌙" else "Good evening, $userName 🌙"
+        else -> if (isArabic) "أهلاً بك، $userName ✨" else "Welcome, $userName ✨"
+    }
     val formattedDate = if (isArabic) {
         val formatter = DateTimeFormatter.ofPattern("EEEE، d MMMM", Locale("ar"))
         today.format(formatter)
@@ -72,6 +79,14 @@ fun HomeScreen(
 
     val hasAnyData = uiState.tasks.isNotEmpty() || uiState.expenses.isNotEmpty() ||
             uiState.habits.isNotEmpty() || uiState.goals.isNotEmpty() || uiState.notes.isNotEmpty()
+
+    val topPriorities = remember(uiState.pendingTasks) {
+        uiState.pendingTasks.sortedWith(
+            compareByDescending<TaskEntity> { it.priority == Priority.HIGH }
+                .thenByDescending { it.dueTimeMinutes != null }
+                .thenBy { it.dueDateMillis ?: Long.MAX_VALUE }
+        ).take(3)
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -90,7 +105,7 @@ fun HomeScreen(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isArabic) "أهلاً بك، $userName 👋" else "Good morning, $userName 👋",
+                        text = dynamicGreeting,
                         style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onBackground
                     )
@@ -581,6 +596,87 @@ fun HomeScreen(
 
         // 5. Dynamic Module: Tasks Section (Adaptive: Only shown if tasks exist, or as guided prompt)
         if (uiState.tasks.isNotEmpty()) {
+            // Top 3 Priorities Section
+            if (topPriorities.isNotEmpty()) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(BrandAmber.copy(alpha = 0.08f))
+                            .border(1.dp, BrandAmber.copy(alpha = 0.25f), RoundedCornerShape(20.dp))
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.Stars,
+                                    contentDescription = null,
+                                    tint = BrandAmber,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = if (isArabic) "أهم ٣ أولويات لليوم ⭐" else "Today's Top 3 Priorities ⭐",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Text(
+                                text = "${topPriorities.size}/3",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = BrandAmber
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        topPriorities.forEachIndexed { index, task ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onToggleTask(task) }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(BrandAmber.copy(alpha = 0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "${index + 1}",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = BrandAmber
+                                    )
+                                }
+                                Text(
+                                    text = task.title,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1
+                                )
+                                if (task.priority == Priority.HIGH) {
+                                    Text(
+                                        text = if (isArabic) "عالي" else "HIGH",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = SemanticError
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -768,6 +864,62 @@ fun HomeScreen(
                                 progress = progress,
                                 fillBrush = Brush.horizontalGradient(listOf(ColorGoal, BrandAmberLight)),
                                 height = 7.dp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 8. Daily Momentum & Productivity Pulse Card
+        item {
+            val totalTasksToday = uiState.tasks.size
+            val completedTasksToday = uiState.tasks.count { it.isCompleted }
+            val completionRate = if (totalTasksToday > 0) ((completedTasksToday.toFloat() / totalTasksToday.toFloat()) * 100).toInt() else 100
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp)),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(SapphirePrimary.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Filled.Insights,
+                                contentDescription = null,
+                                tint = SapphirePrimary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = if (isArabic) "مؤشر إنجاز اليوم ⚡" else "Daily Momentum Pulse ⚡",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (isArabic) "$completedTasksToday من $totalTasksToday مهام مكتملة ($completionRate%)"
+                                else "$completedTasksToday of $totalTasksToday tasks completed ($completionRate%)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }

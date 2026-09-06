@@ -303,6 +303,24 @@ fun YawmekApp(
                                             onApplyPlan = { plan ->
                                                 soundManager.playPlanApplied()
                                                 viewModel.applyAiPlan(plan)
+                                            },
+                                            onApplyGoalRoadmap = { roadmap ->
+                                                soundManager.playPlanApplied()
+                                                viewModel.applyGoalRoadmap(roadmap)
+                                            },
+                                            onApplyReschedule = { proposal ->
+                                                soundManager.playPlanApplied()
+                                                viewModel.applyRescheduleProposal(proposal)
+                                            },
+                                            onApplyHabitStack = { habitTitle, cat ->
+                                                soundManager.playPlanApplied()
+                                                viewModel.applyHabitStack(habitTitle, cat)
+                                            },
+                                            onStartFocus = { taskTitle, duration ->
+                                                val matched = uiState.tasks.firstOrNull { it.title.equals(taskTitle, ignoreCase = true) }
+                                                    ?: com.example.data.local.model.TaskEntity(title = taskTitle, durationMinutes = duration)
+                                                activeFocusTask = matched
+                                                showFocusSheet = true
                                             }
                                         )
                                     }
@@ -316,6 +334,9 @@ fun YawmekApp(
                                             onOpenAccountSync = { showAccountDialog = true },
                                             onUpdateNotificationPreferences = { q, t, b, h ->
                                                 viewModel.updateNotificationPreferences(q, t, b, h)
+                                            },
+                                            onUpdateUserName = { newName ->
+                                                viewModel.updateUserName(newName)
                                             }
                                         )
                                     }
