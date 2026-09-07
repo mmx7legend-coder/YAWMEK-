@@ -37,6 +37,7 @@ import com.example.domain.focus.FocusAnalytics
 import com.example.domain.community.CommunityBattleEngine
 import com.example.domain.community.BattleSimulationResult
 import com.example.domain.ai.*
+import com.example.domain.life.*
 import com.example.ui.widget.YawmekWidgetUpdater
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -123,7 +124,16 @@ data class YawmekUiState(
     val communityBattles: List<CommunityBattleEntity> = emptyList(),
     val isCommunityConnected: Boolean = true,
     val activeBattleSimulation: BattleSimulationResult? = null,
-    val leaderboardUsers: List<LeaderboardUserItem> = emptyList()
+    val leaderboardUsers: List<LeaderboardUserItem> = emptyList(),
+    // YAWMEK LIFE ENGINE additions
+    val lifeEngineState: LifeEngineState? = null,
+    val isRescueModeActive: Boolean = false,
+    val activeTimeConstraintMinutes: Int? = null
+)
+
+private data class LifeFlowData(
+    val isRescueActive: Boolean,
+    val timeConstraintMinutes: Int?
 )
 
 private data class CommunityData(
@@ -184,6 +194,8 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
     private val _isFocusShieldActive = MutableStateFlow(false)
     private val _isCommunityConnected = MutableStateFlow(true)
     private val _activeBattleSimulation = MutableStateFlow<BattleSimulationResult?>(null)
+    private val _isRescueModeActive = MutableStateFlow(false)
+    private val _activeTimeConstraintMinutes = MutableStateFlow<Int?>(null)
 
     init {
         val db = AppDatabase.getDatabase(application)
@@ -377,6 +389,13 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
         CommunityData(profile, friends, battles, isConnected, activeBattle)
     }
 
+    private val lifeEngineFlow = combine(
+        _isRescueModeActive,
+        _activeTimeConstraintMinutes
+    ) { isRescue, timeConstraint ->
+        LifeFlowData(isRescue, timeConstraint)
+    }
+
     // Combine flows into single reactive UI State
     val uiState: StateFlow<YawmekUiState> = combine(
         repository.allTasks,
@@ -409,7 +428,8 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
         moneyFlow,
         calendarFlow,
         focusFlow,
-        communityFlow
+        communityFlow,
+        lifeEngineFlow
     ) { args: Array<Any?> ->
         @Suppress("UNCHECKED_CAST")
         val tasks = args[0] as List<TaskEntity>
@@ -445,8 +465,25 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
         val calData = (args[21] as? CalendarData) ?: CalendarData(emptyList(), emptyList(), false, CalendarViewMode.DAY, LocalDate.now(), emptyList(), false)
         val focData = (args[22] as? FocusData) ?: FocusData(emptyList(), FocusPreferencesEntity(), false)
         val comData = (args[23] as? CommunityData) ?: CommunityData(null, emptyList(), emptyList(), true, null)
+        val lifeData = (args[24] as? LifeFlowData) ?: LifeFlowData(false, null)
 
         val pending = tasks.filter { !it.isCompleted }
+
+        // YAWMEK LIFE ENGINE Calculation
+        val lifeEngineState = LifeEngine.evaluateLifeEngineState(
+            tasks = tasks,
+            habits = habits,
+            habitLogs = habitLogs,
+            goals = goals,
+            milestones = milestones,
+            focusSessions = focData.sessions,
+            calendarEvents = calData.deviceEvents,
+            workStartHour = settings.workStartHour,
+            workEndHour = settings.workEndHour,
+            isRescueMode = lifeData.isRescueActive,
+            timeConstraintMinutes = lifeData.timeConstraintMinutes,
+            isArabic = (settings.language == AppLanguage.ARABIC)
+        )
 
         // Recommendation calculation with Calendar awareness
         val recommendation = SmartRecommendationEngine.recommendNextAction(
@@ -590,13 +627,110 @@ class YawmekViewModel(application: Application) : AndroidViewModel(application) 
             communityBattles = comData.battles,
             isCommunityConnected = comData.isConnected,
             activeBattleSimulation = comData.activeBattle,
-            leaderboardUsers = computedLeaderboard
+            leaderboardUsers = computedLeaderboard,
+            // YAWMEK LIFE ENGINE additions
+            lifeEngineState = lifeEngineState,
+            isRescueModeActive = lifeData.isRescueActive,
+            activeTimeConstraintMinutes = lifeData.timeConstraintMinutes
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = YawmekUiState(isLoading = true)
     )
+
+    // ==========================================
+    // YAWMEK LIFE ENGINE ACTIONS
+    // ==========================================
+
+    fun toggleRescueMode(active: Boolean? = null) {
+        _isRescueModeActive.value = active ?: !_isRescueModeActive.value
+    }
+
+    fun applyRescuePlan(postponeOptionalToTomorrow: Boolean = true) {
+        viewModelScope.launch {
+            val currentState = uiState.value.lifeEngineState ?: return@launch
+            val optionalTasks = currentState.rescuePlan.optionalTasks
+
+            if (postponeOptionalToTomorrow) {
+                val tomorrowMillis = LocalDate.now().plusDays(1)
+                    .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                for (rescueItem in optionalTasks) {
+                    val updated = rescueItem.task.copy(
+                        dueDateMillis = tomorrowMillis,
+                        dueTimeMinutes = 600 // 10:00 AM tomorrow
+                    )
+                    repository.updateTask(updated)
+                }
+            }
+            _isRescueModeActive.value = false
+            triggerCelebration(if (uiState.value.userSettings.language == AppLanguage.ARABIC) "تم تأمين جدول اليوم ونقل المهام الاختيارية للغد 🛡️" else "Day secured! Optional tasks deferred to tomorrow 🛡️")
+        }
+    }
+
+    fun recalculateAdaptiveDay() {
+        viewModelScope.launch {
+            val state = uiState.value
+            val currentPlan = state.lifeEngineState?.adaptivePlan ?: return@launch
+            AdaptiveDayEngine.recalculateRemainingDay(
+                tasks = state.tasks,
+                habits = state.habits,
+                habitLogs = state.habitLogs,
+                calendarEvents = state.calendarEvents,
+                activeGoalTitles = state.goals.filter { !it.isCompleted }.map { it.title },
+                workStartHour = state.userSettings.workStartHour,
+                workEndHour = state.userSettings.workEndHour,
+                currentPlan = currentPlan,
+                isRescueMode = state.isRescueModeActive,
+                isArabic = (state.userSettings.language == AppLanguage.ARABIC)
+            )
+            // Trigger flow re-emission
+            _activeTimeConstraintMinutes.value = _activeTimeConstraintMinutes.value
+        }
+    }
+
+    fun undoAdaptiveDayRecalculation() {
+        val restored = AdaptiveDayEngine.undoPlanRecalculation()
+        if (restored != null) {
+            _activeTimeConstraintMinutes.value = _activeTimeConstraintMinutes.value
+        }
+    }
+
+    fun setLifeTimeConstraint(minutes: Int?) {
+        _activeTimeConstraintMinutes.value = minutes
+    }
+
+    fun snoozeLifeRecommendation(minutes: Int) {
+        viewModelScope.launch {
+            val task = uiState.value.lifeEngineState?.recommendation?.task ?: return@launch
+            val currentDueTime = task.dueTimeMinutes ?: (java.time.LocalTime.now().hour * 60 + java.time.LocalTime.now().minute)
+            val updated = task.copy(
+                dueTimeMinutes = (currentDueTime + minutes).coerceAtMost(1439)
+            )
+            repository.updateTask(updated)
+        }
+    }
+
+    fun rescheduleLifeRecommendation(task: TaskEntity, newDueDateMillis: Long, newDueTimeMinutes: Int?) {
+        viewModelScope.launch {
+            val updated = task.copy(
+                dueDateMillis = newDueDateMillis,
+                dueTimeMinutes = newDueTimeMinutes
+            )
+            repository.updateTask(updated)
+        }
+    }
+
+    fun applyHabitRestructuring(habitId: Long, newDurationMinutes: Int?, newReminderMinutes: Int?) {
+        viewModelScope.launch {
+            val habit = uiState.value.habits.find { it.id == habitId } ?: return@launch
+            val updated = habit.copy(
+                targetDaysPerWeek = if (newDurationMinutes != null && newDurationMinutes <= 10) 7 else habit.targetDaysPerWeek
+            )
+            repository.updateHabit(updated)
+            triggerCelebration(if (uiState.value.userSettings.language == AppLanguage.ARABIC) "تم تحديث هيكلة العادة لتسهيل الاستمرارية 🌱" else "Habit restructured for frictionless consistency 🌱")
+        }
+    }
 
     // User & Onboarding Actions
     fun completeOnboarding(userName: String, selectedPriorities: List<String>) {

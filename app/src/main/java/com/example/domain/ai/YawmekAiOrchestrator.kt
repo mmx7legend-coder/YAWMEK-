@@ -7,6 +7,7 @@ import com.example.data.local.model.*
 import com.example.data.remote.*
 import com.example.domain.SmartRecommendationEngine
 import com.example.domain.calendar.CalendarEventItem
+import com.example.domain.life.*
 import com.example.domain.money.FinancialOverview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -102,30 +103,72 @@ object YawmekAiOrchestrator {
             )
         }
 
+        // 4.5. Rescue Mode check ("Rescue my day", "وضع الإنقاذ", "أنقذ يومي", "مزنوق")
+        if (isRescueModeQuery(lower, prompt)) {
+            val rescuePlan = RescueModeEngine.generateRescuePlan(
+                tasks = ctx.tasks,
+                activeGoalTitles = ctx.goals.filter { !it.isCompleted }.map { it.title },
+                workEndHour = ctx.workEndHour,
+                isArabic = isArabic
+            )
+            val msg = if (isArabic) {
+                "🛡️ **تم تفعيل وضع الإنقاذ الذكي ليومك (Rescue Mode):**\n\n" +
+                        "💡 **الهدف:** ${rescuePlan.summaryArabic}\n" +
+                        "⏱️ **الوقت المتاح المتبقي:** ${rescuePlan.availableMinutesRemaining} دقيقة.\n" +
+                        "⚡ **الوقت الموفر بإسقاط المهام الاختيارية:** ${rescuePlan.minutesSavedByPostponing} دقيقة!\n\n" +
+                        "🔴 **المهام الإلزامية التي لا تقبل التأجيل (${rescuePlan.mustDoTasks.size}):**\n" +
+                        rescuePlan.mustDoTasks.joinToString("\n") { "• ${it.task.title} (${it.task.durationMinutes} دقيقة) - ${it.selectionReasonArabic}" } +
+                        "\n\n⚪ **المهام المقترح ترحيلها للغد بدون تأنيب ضمير (${rescuePlan.optionalTasks.size}):**\n" +
+                        rescuePlan.optionalTasks.joinToString("\n") { "• ${it.task.title} - ${it.selectionReasonArabic}" }
+            } else {
+                "🛡️ **Smart Rescue Mode Activated for Today:**\n\n" +
+                        "💡 **Triage Goal:** ${rescuePlan.summaryEnglish}\n" +
+                        "⏱️ **Remaining Available Time:** ${rescuePlan.availableMinutesRemaining} mins.\n" +
+                        "⚡ **Time Reclaimed by Deferring Optional Tasks:** ${rescuePlan.minutesSavedByPostponing} mins!\n\n" +
+                        "🔴 **Essential Must-Do Tasks (${rescuePlan.mustDoTasks.size}):**\n" +
+                        rescuePlan.mustDoTasks.joinToString("\n") { "• ${it.task.title} (${it.task.durationMinutes} mins) - ${it.selectionReasonEnglish}" } +
+                        "\n\n⚪ **Tasks Safe to Defer to Tomorrow (${rescuePlan.optionalTasks.size}):**\n" +
+                        rescuePlan.optionalTasks.joinToString("\n") { "• ${it.task.title} - ${it.selectionReasonEnglish}" }
+            }
+            return@withContext AiEngineResult(
+                messageText = msg,
+                isFromRemoteAi = false
+            )
+        }
+
         // 5. "What should I do now?" check
         if (isWhatShouldIDoNowQuery(lower, prompt)) {
-            val rec = SmartRecommendationEngine.recommendNextAction(
+            val lifeState = LifeEngine.evaluateLifeEngineState(
                 tasks = ctx.tasks,
                 habits = ctx.habits,
                 habitLogs = ctx.habitLogs,
                 calendarEvents = ctx.calendarEvents,
+                goals = ctx.goals,
+                milestones = ctx.milestones,
+                focusSessions = ctx.focusSessions,
                 workStartHour = ctx.workStartHour,
-                workEndHour = ctx.workEndHour
+                workEndHour = ctx.workEndHour,
+                isRescueMode = false,
+                timeConstraintMinutes = null,
+                isArabic = isArabic
             )
+            val rec = lifeState.recommendation
             val msg = if (isArabic) {
-                "🎯 التوصية الفورية الذكية ليومك الآن:\n\n" +
-                        "• ${rec.title}: ${rec.subtitle}\n" +
-                        "• السبب والجدوى: ${rec.reasonArabic}\n" +
-                        "• الوقت المقدر: ${rec.estimatedDurationMinutes} دقيقة.\n" +
-                        "• وضع التقويم: ${rec.freeTimeMinutesAvailable} دقيقة متاحة قبل الموعد القادم.\n\n" +
-                        "💡 نصيحة مدرب يومك: اضغط على زر (درع التركيز) وابدأ بجلسة بومودورو سريعة لإتمامها بدون مقاطعة."
+                "🧠 **توصية محرك الحياة (YAWMEK Life Engine) الآن:**\n\n" +
+                        "🎯 **${rec.title}** - ${rec.subtitle}\n" +
+                        "• ${rec.reasonArabic}\n" +
+                        "• ⚡ **الأولوية:** ${rec.priority.name} | ⏱️ **المدة المقدرة:** ${rec.estimatedDurationMinutes} دقيقة\n" +
+                        "• 📊 **الوقت المتاح:** ${rec.freeTimeMinutesAvailable} دقيقة\n" +
+                        (if (rec.expectedImpactArabic.isNotBlank()) "• 🚀 **الأثر المتوقع:** ${rec.expectedImpactArabic}\n" else "") +
+                        "\n💡 انقر على زر بدء التركيز للبدء فوراً وتأمين خطوتك التالية."
             } else {
-                "🎯 Smart Immediate Next Action:\n\n" +
-                        "• ${rec.title}: ${rec.subtitle}\n" +
-                        "• Reasoning: ${rec.reasonEnglish}\n" +
-                        "• Estimated duration: ${rec.estimatedDurationMinutes} mins.\n" +
-                        "• Schedule context: ${rec.freeTimeMinutesAvailable} mins open before your next appointment.\n\n" +
-                        "💡 Coach Tip: Launch Focus Shield now with a 25-min Pomodoro to knock this out with full focus."
+                "🧠 **YAWMEK Life Engine Recommendation Right Now:**\n\n" +
+                        "🎯 **${rec.title}** - ${rec.subtitle}\n" +
+                        "• ${rec.reasonEnglish}\n" +
+                        "• ⚡ **Priority:** ${rec.priority.name} | ⏱️ **Duration:** ${rec.estimatedDurationMinutes} mins\n" +
+                        "• 📊 **Free Time Available:** ${rec.freeTimeMinutesAvailable} mins\n" +
+                        (if (rec.expectedImpactEnglish.isNotBlank()) "• 🚀 **Impact:** ${rec.expectedImpactEnglish}\n" else "") +
+                        "\n💡 Tap Start Focus to execute this action with clear momentum."
             }
             val focusAction = if (rec.task != null) {
                 StructuredAiAction.FocusSessionAction(
@@ -247,6 +290,13 @@ object YawmekAiOrchestrator {
                 lower.contains("schedule today") || lower.contains("organize my day") ||
                 raw.contains("خططلي") || raw.contains("خطط ليومي") || raw.contains("جدول اليوم") ||
                 raw.contains("رتب يومي") || raw.contains("ساعتين و")
+    }
+
+    private fun isRescueModeQuery(lower: String, raw: String): Boolean {
+        return lower.contains("rescue") || lower.contains("save my day") || lower.contains("falling behind") ||
+                lower.contains("triage") || lower.contains("too many tasks") ||
+                raw.contains("أنقذ يومي") || raw.contains("وضع الإنقاذ") || raw.contains("مزنوق") ||
+                raw.contains("مش لاحق") || raw.contains("الوقت ضيق") || raw.contains("يومي ملخبط")
     }
 
     private fun isWhatShouldIDoNowQuery(lower: String, raw: String): Boolean {

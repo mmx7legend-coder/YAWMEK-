@@ -20,6 +20,7 @@ val WarmAmberGlow = Color(0xFFFDE68A)
 
 // Semantics
 val SemanticSuccess = Color(0xFF10B981)
+val EmeraldGreen = Color(0xFF10B981)
 val SemanticSuccessContainer = Color(0xFFD1FAE5)
 val SemanticWarning = Color(0xFFF59E0B)
 val SemanticError = Color(0xFFEF4444)

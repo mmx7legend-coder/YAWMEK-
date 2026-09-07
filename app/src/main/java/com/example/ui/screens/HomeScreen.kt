@@ -54,11 +54,20 @@ fun HomeScreen(
     onOpenAccountSync: () -> Unit = {},
     onOpenNotifications: () -> Unit = {},
     onRequestCalendar: () -> Unit = {},
+    onSnoozeTask: (Int) -> Unit = {},
+    onRecalculateDay: () -> Unit = {},
+    onUndoRecalculate: () -> Unit = {},
+    onToggleRescueMode: (Boolean?) -> Unit = {},
+    onApplyRescuePlan: () -> Unit = {},
+    onSetTimeConstraint: (Int?) -> Unit = {},
+    onApplyHabitRestructuring: (Long, Int?, Int?) -> Unit = { _, _, _ -> },
     onNavigateToTab: (String) -> Unit
 ) {
     val language = uiState.userSettings.language
     val isArabic = language == AppLanguage.ARABIC
     val userName = uiState.userSettings.userName.ifBlank { if (isArabic) "صديقي" else "there" }
+
+    var showLifeEngineSheet by remember { mutableStateOf(false) }
 
     // Formatted current date & dynamic time of day greeting
     val today = LocalDate.now()
@@ -533,15 +542,19 @@ fun HomeScreen(
             }
         }
 
-        // 3. Signature Hero Card: WHAT SHOULD I DO NOW?
+        // 3. Flagship Hero Card: YAWMEK LIFE ENGINE ("What should I do now?")
         item {
-            WhatShouldIDoNowHeroCard(
-                recommendation = uiState.recommendation,
+            LifeEngineHeroCard(
+                lifeState = uiState.lifeEngineState,
                 language = language,
                 onStartAction = { task -> onOpenFocus(task) },
                 onCompleteAction = { task -> onToggleTask(task) },
+                onSnoozeAction = { minutes -> onSnoozeTask(minutes) },
                 onRescheduleAction = { task -> onRescheduleTask(task) },
-                onChooseAnother = { onOpenQuickAdd(QuickAddTab.TASK) }
+                onOpenLifeDashboard = { showLifeEngineSheet = true },
+                onRecalculateDay = onRecalculateDay,
+                onUndoRecalculate = onUndoRecalculate,
+                onToggleRescueMode = { onToggleRescueMode(null) }
             )
         }
 
@@ -926,6 +939,33 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    if (showLifeEngineSheet) {
+        LifeEngineSheet(
+            lifeState = uiState.lifeEngineState,
+            language = language,
+            onDismiss = { showLifeEngineSheet = false },
+            onStartTask = { task ->
+                showLifeEngineSheet = false
+                onOpenFocus(task)
+            },
+            onCompleteTask = { task ->
+                onToggleTask(task)
+            },
+            onSnoozeTask = { minutes ->
+                onSnoozeTask(minutes)
+            },
+            onRecalculateDay = onRecalculateDay,
+            onUndoRecalculate = onUndoRecalculate,
+            onToggleRescueMode = { active -> onToggleRescueMode(active) },
+            onApplyRescuePlan = {
+                showLifeEngineSheet = false
+                onApplyRescuePlan()
+            },
+            onSetTimeConstraint = onSetTimeConstraint,
+            onApplyHabitRestructuring = onApplyHabitRestructuring
+        )
     }
 }
 

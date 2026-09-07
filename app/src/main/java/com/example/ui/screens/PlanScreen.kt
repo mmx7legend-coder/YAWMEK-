@@ -29,6 +29,8 @@ import com.example.domain.ScheduleCalculator
 import com.example.domain.TimelineItem
 import com.example.ui.components.EmptyStateCard
 import com.example.ui.components.QuickAddTab
+import com.example.ui.components.LifeEngineHeroCard
+import com.example.ui.components.LifeEngineSheet
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.YawmekUiState
 import java.time.LocalDate
@@ -44,11 +46,19 @@ fun PlanScreen(
     onDeleteTask: (TaskEntity) -> Unit,
     onRescheduleTask: (TaskEntity) -> Unit,
     onOpenFocus: (TaskEntity) -> Unit = {},
-    onExportToCalendar: (TaskEntity) -> Unit = {}
+    onExportToCalendar: (TaskEntity) -> Unit = {},
+    onSnoozeTask: (Int) -> Unit = {},
+    onRecalculateDay: () -> Unit = {},
+    onUndoRecalculate: () -> Unit = {},
+    onToggleRescueMode: (Boolean?) -> Unit = {},
+    onApplyRescuePlan: () -> Unit = {},
+    onSetTimeConstraint: (Int?) -> Unit = {},
+    onApplyHabitRestructuring: (Long, Int?, Int?) -> Unit = { _, _, _ -> }
 ) {
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     val language = uiState.userSettings.language
     val isArabic = language == AppLanguage.ARABIC
+    var showLifeEngineSheet by remember { mutableStateOf(false) }
 
     val timelineItems = remember(uiState.tasks, selectedDate) {
         ScheduleCalculator.buildTimelineForDate(
@@ -174,6 +184,24 @@ fun PlanScreen(
             }
         }
 
+        // Life Engine Hero Card for Today
+        if (isSelectedDateToday && uiState.lifeEngineState != null) {
+            item {
+                LifeEngineHeroCard(
+                    lifeState = uiState.lifeEngineState,
+                    language = language,
+                    onStartAction = { task -> onOpenFocus(task) },
+                    onCompleteAction = { task -> onToggleTask(task) },
+                    onSnoozeAction = { minutes -> onSnoozeTask(minutes) },
+                    onRescheduleAction = { task -> onRescheduleTask(task) },
+                    onOpenLifeDashboard = { showLifeEngineSheet = true },
+                    onRecalculateDay = onRecalculateDay,
+                    onUndoRecalculate = onUndoRecalculate,
+                    onToggleRescueMode = { onToggleRescueMode(null) }
+                )
+            }
+        }
+
         // External Device Calendar Events for Today
         if (isSelectedDateToday && uiState.calendarEvents.isNotEmpty()) {
             item {
@@ -287,6 +315,33 @@ fun PlanScreen(
                 TaskCardRow(task = task, language = language, onToggle = { onToggleTask(task) })
             }
         }
+    }
+
+    if (showLifeEngineSheet) {
+        LifeEngineSheet(
+            lifeState = uiState.lifeEngineState,
+            language = language,
+            onDismiss = { showLifeEngineSheet = false },
+            onStartTask = { task ->
+                showLifeEngineSheet = false
+                onOpenFocus(task)
+            },
+            onCompleteTask = { task ->
+                onToggleTask(task)
+            },
+            onSnoozeTask = { minutes ->
+                onSnoozeTask(minutes)
+            },
+            onRecalculateDay = onRecalculateDay,
+            onUndoRecalculate = onUndoRecalculate,
+            onToggleRescueMode = { active -> onToggleRescueMode(active) },
+            onApplyRescuePlan = {
+                showLifeEngineSheet = false
+                onApplyRescuePlan()
+            },
+            onSetTimeConstraint = onSetTimeConstraint,
+            onApplyHabitRestructuring = onApplyHabitRestructuring
+        )
     }
 }
 

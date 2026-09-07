@@ -172,6 +172,13 @@ fun YawmekApp(
                                             onOpenAccountSync = { showAccountDialog = true },
                                             onOpenNotifications = { showNotificationsSheet = true },
                                             onRequestCalendar = { showCalendarPermissionDialog = true },
+                                            onSnoozeTask = { minutes -> viewModel.snoozeLifeRecommendation(minutes) },
+                                            onRecalculateDay = { viewModel.recalculateAdaptiveDay() },
+                                            onUndoRecalculate = { viewModel.undoAdaptiveDayRecalculation() },
+                                            onToggleRescueMode = { active -> viewModel.toggleRescueMode(active) },
+                                            onApplyRescuePlan = { viewModel.applyRescuePlan() },
+                                            onSetTimeConstraint = { minutes -> viewModel.setLifeTimeConstraint(minutes) },
+                                            onApplyHabitRestructuring = { habitId, dur, rem -> viewModel.applyHabitRestructuring(habitId, dur, rem) },
                                             onNavigateToTab = { route ->
                                                 soundManager.playTap()
                                                 when (route) {
@@ -201,7 +208,14 @@ fun YawmekApp(
                                                 activeFocusTask = task
                                                 showFocusSheet = true
                                             },
-                                            onExportToCalendar = { task -> viewModel.exportTaskToCalendar(task) }
+                                            onExportToCalendar = { task -> viewModel.exportTaskToCalendar(task) },
+                                            onSnoozeTask = { minutes -> viewModel.snoozeLifeRecommendation(minutes) },
+                                            onRecalculateDay = { viewModel.recalculateAdaptiveDay() },
+                                            onUndoRecalculate = { viewModel.undoAdaptiveDayRecalculation() },
+                                            onToggleRescueMode = { active -> viewModel.toggleRescueMode(active) },
+                                            onApplyRescuePlan = { viewModel.applyRescuePlan() },
+                                            onSetTimeConstraint = { minutes -> viewModel.setLifeTimeConstraint(minutes) },
+                                            onApplyHabitRestructuring = { habitId, dur, rem -> viewModel.applyHabitRestructuring(habitId, dur, rem) }
                                         )
                                     }
                                     AppDestination.MONEY -> {
